@@ -44,25 +44,21 @@ export class TransferService {
     let srv2Connected = false;
 
     try {
-      Logger.info('🚀 Début du transfert de map Build → Staging v2.0');
+      Logger.info('🚀 Début du transfert de map Build → Staging v3.0 (Sans webhooks)');
 
-      // Étape 1: Notification des serveurs (10%)
-      await this.executeStep(0, 'Notification des serveurs', async () => {
-        this.tracker.updateStep(0, 'running', 'Envoi des notifications...', 0);
+      // Étape 1: Préparation (pas de notifications)
+      await this.executeStep(0, 'Préparation du transfert', async () => {
+        this.tracker.updateStep(0, 'running', 'Initialisation...', 50);
         progressCallback?.(this.tracker);
 
-        // Notifications supprimées - pas de webhook/tellraw
-        Logger.info('📢 Notifications supprimées pour optimiser les performances');
+        // Attendre juste 2 secondes pour la préparation
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Attendre 3 secondes au lieu de 10
-        for (let i = 3; i > 0; i--) {
-          this.tracker.updateStep(0, 'running', `Démarrage dans ${i}s...`, ((3 - i) / 3) * 100);
-          progressCallback?.(this.tracker);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+        this.tracker.updateStep(0, 'running', 'Préparation terminée', 100);
+        progressCallback?.(this.tracker);
       });
 
-      // Étape 2: Arrêt des serveurs (20%)
+      // Étape 2: Arrêt des serveurs
       await this.executeStep(1, 'Arrêt srv1 & srv2', async () => {
         this.tracker.updateStep(1, 'running', 'Arrêt du serveur Build...', 25);
         progressCallback?.(this.tracker);
@@ -92,20 +88,20 @@ export class TransferService {
       srv2Connected = true;
       Logger.success('✅ Connexion SFTP srv2 établie');
 
-      // Étape 3: Compression de la map srv1 (30%)
+      // Étape 3: Compression de la map srv1
       await this.executeStep(2, 'Compression /world srv1', async () => {
-        this.tracker.updateStep(2, 'running', 'Compression en cours (timeout: 10min)...', 50);
+        this.tracker.updateStep(2, 'running', 'Compression en cours...', 50);
         progressCallback?.(this.tracker);
         this.archiveName = await this.srv1Ptero.compressFolder('world');
         Logger.info(`📦 Archive créée: ${this.archiveName}`);
       });
 
-      // Étape 4: Sauvegarde playerdata srv2 (40%)
+      // Étape 4: Sauvegarde playerdata srv2
       await this.executeStep(3, 'Sauvegarde playerdata srv2', async () => {
         await this.backupPlayerData(progressCallback);
       });
 
-      // Étape 5: Transfert SFTP srv1 → srv2 (50%)
+      // Étape 5: Transfert SFTP srv1 → srv2
       await this.executeStep(4, 'Transfert SFTP srv1 → srv2', async () => {
         await this.srv2Sftp.transferFileDirect(
           this.srv1Sftp,
@@ -138,7 +134,7 @@ export class TransferService {
         Logger.success('✅ Transfert SFTP terminé');
       });
 
-      // Étape 6: Suppression ancien /world srv2 (60%)
+      // Étape 6: Suppression ancien /world srv2
       await this.executeStep(5, 'Suppression ancien /world srv2', async () => {
         this.tracker.updateStep(5, 'running', 'Suppression de l\'ancienne map...', 50);
         progressCallback?.(this.tracker);
@@ -151,15 +147,20 @@ export class TransferService {
         }
       });
 
-      // Étape 7: Décompression nouvelle map (70%)
+      // Étape 7: Décompression nouvelle map (avec polling intelligent)
       await this.executeStep(6, 'Décompression nouvelle map', async () => {
-        this.tracker.updateStep(6, 'running', 'Extraction en cours (timeout: 10min)...', 50);
+        this.tracker.updateStep(6, 'running', 'Extraction en cours (polling intelligent)...', 25);
         progressCallback?.(this.tracker);
+        
+        // Nouvelle méthode avec polling
         await this.srv2Ptero.extractArchive(this.archiveName, '/');
+        
+        this.tracker.updateStep(6, 'running', 'Extraction terminée', 100);
+        progressCallback?.(this.tracker);
         Logger.success('✅ Nouvelle map extraite');
       });
 
-      // Étape 8: Nettoyage des fichiers (80%)
+      // Étape 8: Nettoyage des fichiers
       await this.executeStep(7, 'Nettoyage fichiers', async () => {
         // Suppression de l'archive sur les deux serveurs
         this.tracker.updateStep(7, 'running', 'Suppression archive srv1...', 20);
@@ -204,12 +205,12 @@ export class TransferService {
         }
       });
 
-      // Étape 9: Restauration playerdata srv2 (90%)
+      // Étape 9: Restauration playerdata srv2
       await this.executeStep(8, 'Restauration playerdata srv2', async () => {
         await this.restorePlayerData(progressCallback);
       });
 
-      // Étape 10: Redémarrage des serveurs (100%)
+      // Étape 10: Redémarrage des serveurs
       await this.executeStep(9, 'Redémarrage serveurs', async () => {
         this.tracker.updateStep(9, 'running', 'Démarrage du serveur Build...', 25);
         progressCallback?.(this.tracker);
@@ -230,10 +231,10 @@ export class TransferService {
         Logger.success('✅ Serveurs démarrés');
       });
 
-      Logger.success('🎉 Transfert de map v2.0 terminé avec succès !');
+      Logger.success('🎉 Transfert de map v3.0 terminé avec succès (sans webhooks) !');
 
     } catch (error: any) {
-      Logger.error('❌ Erreur lors du transfert v2.0', error);
+      Logger.error('❌ Erreur lors du transfert v3.0', error);
 
       // Marquer l'étape actuelle comme erreur
       const currentStep = this.tracker.getCurrentStep();
@@ -352,139 +353,139 @@ export class TransferService {
       }
 
       // Nettoyer le cache temporaire
-      this.tracker.updateStep(8, 'running', 'Nettoyage cache temporaire...', 95);
-      progressCallback?.(this.tracker);
-      
-      try {
-        await fs.remove(this.tempCachePath);
-        Logger.success('✅ Cache temporaire nettoyé');
-      } catch (cleanupError) {
-        Logger.warning('⚠️ Impossible de nettoyer le cache temporaire', cleanupError);
-      }
+this.tracker.updateStep(8, 'running', 'Nettoyage cache temporaire...', 95);
+     progressCallback?.(this.tracker);
+     
+     try {
+       await fs.remove(this.tempCachePath);
+       Logger.success('✅ Cache temporaire nettoyé');
+     } catch (cleanupError) {
+       Logger.warning('⚠️ Impossible de nettoyer le cache temporaire', cleanupError);
+     }
 
-    } catch (error: any) {
-      Logger.error('❌ Erreur lors de la restauration playerdata', error);
-      throw new Error(`Impossible de restaurer playerdata: ${error.message}`);
-    }
-  }
+   } catch (error: any) {
+     Logger.error('❌ Erreur lors de la restauration playerdata', error);
+     throw new Error(`Impossible de restaurer playerdata: ${error.message}`);
+   }
+ }
 
-  private async handleRollback(): Promise<void> {
-    try {
-      Logger.warning('🔄 Début du rollback complet v2.0...');
+ private async handleRollback(): Promise<void> {
+   try {
+     Logger.warning('🔄 Début du rollback complet v3.0...');
 
-      // 1. Nettoyer le cache temporaire
-      try {
-        if (await fs.pathExists(this.tempCachePath)) {
-          await fs.remove(this.tempCachePath);
-          Logger.success('✅ Cache temporaire supprimé lors du rollback');
-        }
-      } catch (cleanupError) {
-        Logger.error('❌ Erreur lors du nettoyage du cache temporaire', cleanupError);
-      }
+     // 1. Nettoyer le cache temporaire
+     try {
+       if (await fs.pathExists(this.tempCachePath)) {
+         await fs.remove(this.tempCachePath);
+         Logger.success('✅ Cache temporaire supprimé lors du rollback');
+       }
+     } catch (cleanupError) {
+       Logger.error('❌ Erreur lors du nettoyage du cache temporaire', cleanupError);
+     }
 
-      // 2. Supprimer le fichier compressé sur srv1 si il existe
-      if (this.archiveName) {
-        try {
-          await this.srv1Ptero.deleteFile(this.archiveName);
-          Logger.success(`✅ Archive ${this.archiveName} supprimée sur srv1 lors du rollback`);
-        } catch (archiveError) {
-          Logger.warning(`⚠️ Impossible de supprimer l'archive ${this.archiveName} sur srv1`, archiveError);
-        }
+     // 2. Supprimer le fichier compressé sur srv1 si il existe
+     if (this.archiveName) {
+       try {
+         await this.srv1Ptero.deleteFile(this.archiveName);
+         Logger.success(`✅ Archive ${this.archiveName} supprimée sur srv1 lors du rollback`);
+       } catch (archiveError) {
+         Logger.warning(`⚠️ Impossible de supprimer l'archive ${this.archiveName} sur srv1`, archiveError);
+       }
 
-        // 3. Supprimer le fichier compressé sur srv2 si il existe
-        try {
-          await this.srv2Ptero.deleteFile(this.archiveName);
-          Logger.success(`✅ Archive ${this.archiveName} supprimée sur srv2 lors du rollback`);
-        } catch (archiveError) {
-          Logger.warning(`⚠️ Impossible de supprimer l'archive ${this.archiveName} sur srv2`, archiveError);
-        }
-      }
+       // 3. Supprimer le fichier compressé sur srv2 si il existe
+       try {
+         await this.srv2Ptero.deleteFile(this.archiveName);
+         Logger.success(`✅ Archive ${this.archiveName} supprimée sur srv2 lors du rollback`);
+       } catch (archiveError) {
+         Logger.warning(`⚠️ Impossible de supprimer l'archive ${this.archiveName} sur srv2`, archiveError);
+       }
+     }
 
-      // 4. Redémarrer les serveurs s'ils sont arrêtés
-      try {
-        Logger.info('🔄 Redémarrage des serveurs lors du rollback...');
-        await Promise.all([
-          this.srv1Ptero.setPowerState('start').catch(error => {
-            Logger.warning('⚠️ Impossible de redémarrer srv1', error);
-          }),
-          this.srv2Ptero.setPowerState('start').catch(error => {
-            Logger.warning('⚠️ Impossible de redémarrer srv2', error);
-          })
-        ]);
-        Logger.success('✅ Serveurs redémarrés lors du rollback');
-      } catch (rollbackError) {
-        Logger.error('❌ Erreur lors du redémarrage des serveurs', rollbackError);
-      }
+     // 4. Redémarrer les serveurs s'ils sont arrêtés
+     try {
+       Logger.info('🔄 Redémarrage des serveurs lors du rollback...');
+       await Promise.all([
+         this.srv1Ptero.setPowerState('start').catch(error => {
+           Logger.warning('⚠️ Impossible de redémarrer srv1', error);
+         }),
+         this.srv2Ptero.setPowerState('start').catch(error => {
+           Logger.warning('⚠️ Impossible de redémarrer srv2', error);
+         })
+       ]);
+       Logger.success('✅ Serveurs redémarrés lors du rollback');
+     } catch (rollbackError) {
+       Logger.error('❌ Erreur lors du redémarrage des serveurs', rollbackError);
+     }
 
-      // 5. Nettoyer les fichiers temporaires système
-      const systemTempDir = process.env.TEMP_CACHE_PATH || '/tmp';
-      try {
-        const tempFiles = await fs.readdir(systemTempDir);
-        const transferFiles = tempFiles.filter(file => file.startsWith('transfer_'));
-        
-        for (const file of transferFiles) {
-          try {
-            const filePath = path.join(systemTempDir, file);
-            const stats = await fs.stat(filePath);
-            const ageInMinutes = (Date.now() - stats.mtime.getTime()) / (1000 * 60);
-            
-            // Supprimer les fichiers de transfert de plus de 5 minutes
-            if (ageInMinutes > 5) {
-              await fs.remove(filePath);
-              Logger.success(`✅ Fichier temporaire supprimé: ${file}`);
-            }
-          } catch (fileError) {
-            Logger.warning(`⚠️ Impossible de supprimer le fichier temporaire ${file}`, fileError);
-          }
-        }
-      } catch (tempCleanupError) {
-        Logger.warning('⚠️ Erreur lors du nettoyage des fichiers temporaires système', tempCleanupError);
-      }
+     // 5. Nettoyer les fichiers temporaires système
+     const systemTempDir = process.env.TEMP_CACHE_PATH || '/tmp';
+     try {
+       const tempFiles = await fs.readdir(systemTempDir);
+       const transferFiles = tempFiles.filter(file => file.startsWith('transfer_'));
+       
+       for (const file of transferFiles) {
+         try {
+           const filePath = path.join(systemTempDir, file);
+           const stats = await fs.stat(filePath);
+           const ageInMinutes = (Date.now() - stats.mtime.getTime()) / (1000 * 60);
+           
+           // Supprimer les fichiers de transfert de plus de 5 minutes
+           if (ageInMinutes > 5) {
+             await fs.remove(filePath);
+             Logger.success(`✅ Fichier temporaire supprimé: ${file}`);
+           }
+         } catch (fileError) {
+           Logger.warning(`⚠️ Impossible de supprimer le fichier temporaire ${file}`, fileError);
+         }
+       }
+     } catch (tempCleanupError) {
+       Logger.warning('⚠️ Erreur lors du nettoyage des fichiers temporaires système', tempCleanupError);
+     }
 
-      Logger.success('✅ Rollback complet v2.0 terminé');
+     Logger.success('✅ Rollback complet v3.0 terminé');
 
-    } catch (error) {
-      Logger.error('❌ Erreur critique lors du rollback v2.0', error);
-    }
-  }
+   } catch (error) {
+     Logger.error('❌ Erreur critique lors du rollback v3.0', error);
+   }
+ }
 
-  private async cleanup(srv1Connected: boolean, srv2Connected: boolean): Promise<void> {
-    try {
-      Logger.info('🔄 Nettoyage des connexions v2.0...');
-      
-      if (srv1Connected) {
-        try {
-          await this.srv1Sftp.disconnect();
-          Logger.success('✅ Connexion SFTP srv1 fermée');
-        } catch (error) {
-          Logger.warning('⚠️ Erreur lors de la fermeture SFTP srv1', error);
-        }
-      }
-      
-      if (srv2Connected) {
-        try {
-          await this.srv2Sftp.disconnect();
-          Logger.success('✅ Connexion SFTP srv2 fermée');
-        } catch (error) {
-          Logger.warning('⚠️ Erreur lors de la fermeture SFTP srv2', error);
-        }
-      }
-      
-      Logger.success('✅ Nettoyage v2.0 terminé');
-    } catch (error) {
-      Logger.error('❌ Erreur lors du nettoyage v2.0', error);
-    }
-  }
+ private async cleanup(srv1Connected: boolean, srv2Connected: boolean): Promise<void> {
+   try {
+     Logger.info('🔄 Nettoyage des connexions v3.0...');
+     
+     if (srv1Connected) {
+       try {
+         await this.srv1Sftp.disconnect();
+         Logger.success('✅ Connexion SFTP srv1 fermée');
+       } catch (error) {
+         Logger.warning('⚠️ Erreur lors de la fermeture SFTP srv1', error);
+       }
+     }
+     
+     if (srv2Connected) {
+       try {
+         await this.srv2Sftp.disconnect();
+         Logger.success('✅ Connexion SFTP srv2 fermée');
+       } catch (error) {
+         Logger.warning('⚠️ Erreur lors de la fermeture SFTP srv2', error);
+       }
+     }
+     
+     Logger.success('✅ Nettoyage v3.0 terminé');
+   } catch (error) {
+     Logger.error('❌ Erreur lors du nettoyage v3.0', error);
+   }
+ }
 
-  getTracker(): ProgressTracker {
-    return this.tracker;
-  }
+ getTracker(): ProgressTracker {
+   return this.tracker;
+ }
 
-  getCurrentArchiveName(): string {
-    return this.archiveName;
-  }
+ getCurrentArchiveName(): string {
+   return this.archiveName;
+ }
 
-  getTempCachePath(): string {
-    return this.tempCachePath;
-  }
+ getTempCachePath(): string {
+   return this.tempCachePath;
+ }
 }
