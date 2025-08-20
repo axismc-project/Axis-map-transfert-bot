@@ -3,7 +3,6 @@ import { ServerConfig } from '../types/index.js';
 import { Logger } from '../utils/logger.js';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { Readable } from 'stream';
 
 export class SftpService {
   private client: SftpClient;
@@ -23,8 +22,7 @@ export class SftpService {
         port: this.config.sftpPort,
         username: this.config.sftpUser,
         password: this.config.sftpPassword,
-        readyTimeout: 30000,
-        retries: 3
+        readyTimeout: 30000
       });
 
       Logger.success(`Connexion SFTP établie`);
@@ -50,11 +48,11 @@ export class SftpService {
       // Créer le dossier local si nécessaire
       await fs.ensureDir(path.dirname(localPath));
       
-      // Téléchargement avec suivi de progression basique
+      // Téléchargement simple
       await this.client.fastGet(remotePath, localPath);
       
       if (onProgress) {
-        onProgress(100); // Progression simplifiée
+        onProgress(100);
       }
 
       Logger.success(`Téléchargement terminé: ${localPath}`);
@@ -73,11 +71,11 @@ export class SftpService {
         throw new Error(`Fichier local introuvable: ${localPath}`);
       }
 
-      // Upload avec suivi de progression basique
+      // Upload simple
       await this.client.fastPut(localPath, remotePath);
       
       if (onProgress) {
-        onProgress(100); // Progression simplifiée
+        onProgress(100);
       }
 
       Logger.success(`Upload terminé: ${remotePath}`);
@@ -99,17 +97,14 @@ export class SftpService {
       try {
         // Télécharger depuis la source
         if (onProgress) onProgress(10);
-        await sourceService.downloadFile(remotePath, tempFile, (progress) => {
-          if (onProgress) onProgress(Math.round(10 + progress * 0.4)); // 10-50% pour le download
-        });
+        await sourceService.downloadFile(remotePath, tempFile);
 
         if (onProgress) onProgress(50);
         
         // Uploader vers la destination
-        await this.uploadFile(tempFile, destinationPath, (progress) => {
-          if (onProgress) onProgress(Math.round(50 + progress * 0.5)); // 50-100% pour l'upload
-        });
+        await this.uploadFile(tempFile, destinationPath);
 
+        if (onProgress) onProgress(100);
         Logger.success(`Transfert direct terminé`);
       } finally {
         // Nettoyer le fichier temporaire
@@ -131,7 +126,23 @@ export class SftpService {
       Logger.info(`Téléchargement du dossier: ${remotePath} → ${localPath}`);
       
       await fs.ensureDir(localPath);
-      await this.client.downloadDir(remotePath, localPath);
+      
+      // Lister les fichiers du dossier distant
+      const fileList = await this.client.list(remotePath);
+      
+      for (const file of fileList) {
+        if (file.type === 'd') {
+          // Récursif pour les sous-dossiers
+          const subRemotePath = `${remotePath}/${file.name}`;
+          const subLocalPath = path.join(localPath, file.name);
+          await this.downloadFolder(subRemotePath, subLocalPath);
+        } else {
+          // Télécharger le fichier
+          const fileRemotePath = `${remotePath}/${file.name}`;
+          const fileLocalPath = path.join(localPath, file.name);
+          await this.downloadFile(fileRemotePath, fileLocalPath);
+        }
+      }
       
       Logger.success(`Dossier téléchargé: ${localPath}`);
     } catch (error: any) {
@@ -144,7 +155,29 @@ export class SftpService {
     try {
       Logger.info(`Upload du dossier: ${localPath} → ${remotePath}`);
       
-      await this.client.uploadDir(localPath, remotePath);
+      // Créer le dossier distant
+      try {
+        await this.client.mkdir(remotePath, true);
+      } catch (error) {
+        // Le dossier existe peut-être déjà
+      }
+      
+      // Lister les fichiers locaux
+      const files = await fs.readdir(localPath);
+      
+      for (const file of files) {
+        const localFilePath = path.join(localPath, file);
+        const remoteFilePath = `${remotePath}/${file}`;
+        const stats = await fs.stat(localFilePath);
+        
+        if (stats.isDirectory()) {
+          // Récursif pour les sous-dossiers
+          await this.uploadFolder(localFilePath, remoteFilePath);
+        } else {
+          // Uploader le fichier
+          await this.uploadFile(localFilePath, remoteFilePath);
+        }
+      }
       
       Logger.success(`Dossier uploadé: ${remotePath}`);
     } catch (error: any) {

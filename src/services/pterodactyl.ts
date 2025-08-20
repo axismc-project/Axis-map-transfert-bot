@@ -86,7 +86,7 @@ export class PterodactylService {
     try {
       Logger.info(`Compression du dossier: ${folderPath}`);
       
-      const response = await this.client.post(`/servers/${this.config.serverId}/files/compress`, {
+      await this.client.post(`/servers/${this.config.serverId}/files/compress`, {
         root: '/',
         files: [folderPath]
       });

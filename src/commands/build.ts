@@ -1,7 +1,6 @@
 import { 
   SlashCommandBuilder, 
   CommandInteraction, 
-  EmbedBuilder,
   PermissionFlagsBits,
   Message,
   ChatInputCommandInteraction

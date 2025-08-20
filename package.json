@@ -10,16 +10,36 @@
     "dev": "tsx watch src/index.ts",
     "deploy": "node dist/deploy.js",
     "deploy:clear": "node dist/deploy.js clear",
-    "lint": "eslint src --ext .ts",
-    "format": "prettier --write src/**/*.ts",
+    "lint": "eslint src --ext .ts --fix",
+    "lint:check": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
     "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
     "prestart": "npm run build",
-    "railway:build": "npm run build",
-    "railway:start": "npm run start"
+    "postinstall": "npm run build",
+    "test": "echo \"No tests specified\" && exit 0"
   },
-  "keywords": ["discord", "bot", "minecraft", "pterodactyl", "transfer"],
-  "author": "Your Name",
+  "keywords": [
+    "discord",
+    "bot",
+    "minecraft",
+    "pterodactyl",
+    "transfer",
+    "automation",
+    "sftp",
+    "typescript"
+  ],
+  "author": "Your Name <your.email@example.com>",
   "license": "MIT",
+  "homepage": "https://github.com/yourusername/minecraft-transfer-bot#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/minecraft-transfer-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/minecraft-transfer-bot/issues"
+  },
   "dependencies": {
     "discord.js": "^14.14.1",
     "dotenv": "^16.3.1",
@@ -33,15 +53,34 @@
     "@types/node": "^20.10.5",
     "@types/archiver": "^6.0.2",
     "@types/fs-extra": "^11.0.4",
-    "@types/ssh2-sftp-client": "^2.0.2",
+    "@types/ssh2-sftp-client": "^2.5.1",
     "tsx": "^4.6.2",
     "typescript": "^5.3.3",
-    "@typescript-eslint/eslint-plugin": "^6.15.0",
-    "@typescript-eslint/parser": "^6.15.0",
-    "eslint": "^8.56.0",
-    "prettier": "^3.1.1"
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.1.1",
+    "@types/eslint": "^8.56.0"
+  },
+  "peerDependencies": {
+    "node": ">=18.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "volta": {
+    "node": "18.19.0",
+    "npm": "10.2.3"
+  },
+  "packageManager": "npm@10.2.3",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "restricted"
   }
 }

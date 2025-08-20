@@ -3,20 +3,112 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "node",
+    "lib": ["ES2022"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "allowJs": true,
+    "checkJs": false,
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
+    "removeComments": false,
+    "noEmit": false,
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    
+    // Type Checking
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "moduleDetection": "force",
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": false,
+    
+    // Modules
+    "moduleDetection": "auto",
     "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "isolatedModules": true,
+    
+    // Emit
+    "declaration": true,
+    "declarationMap": true,
+    "sourceRoot": "./src",
+    "mapRoot": "./dist",
+    "inlineSourceMap": false,
+    "inlineSources": false,
+    "emitDeclarationOnly": false,
+    "downlevelIteration": false,
+    "importHelpers": false,
+    "importsNotUsedAsValues": "remove",
+    "newLine": "lf",
+    "preserveValueImports": false,
+    "stripInternal": false,
+    
+    // Interop Constraints
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": false,
+    
+    // Backwards Compatibility
+    "noStrictGenericChecks": false,
+    "suppressExcessPropertyErrors": false,
+    "suppressImplicitAnyIndexErrors": false,
+    
+    // Language and Environment
+    "emitDecoratorMetadata": false,
+    "experimentalDecorators": false,
+    "useDefineForClassFields": true,
+    
+    // Compiler Diagnostics
+    "explainFiles": false,
+    "extendedDiagnostics": false,
+    "listEmittedFiles": false,
+    "listFiles": false,
+    "traceResolution": false,
+    
+    // Projects
+    "composite": false,
+    "disableReferencedProjectLoad": false,
+    "disableSolutionSearching": false,
+    "disableSourceOfProjectReferenceRedirect": false,
+    
+    // Output Formatting
+    "noErrorTruncation": false,
+    "preserveWatchOutput": false,
+    "pretty": true,
+    
+    // Completeness
+    "skipDefaultLibCheck": false,
+    "skipLibCheck": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*",
+    "src/**/*.json"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "coverage",
+    "build",
+    "tmp"
+  ],
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
+  "watchOptions": {
+    "watchFile": "useFsEvents",
+    "watchDirectory": "useFsEvents",
+    "fallbackPolling": "dynamicPriority",
+    "synchronousWatchDirectory": true,
+    "excludeDirectories": [
+      "**/node_modules",
+      "**/dist",
+      "**/build"
+    ]
+  }
 }
