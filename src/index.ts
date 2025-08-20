@@ -152,11 +152,12 @@ class MinecraftTransferBot {
           '  - rollback_protection: ENABLED\n' +
           '\n' +
           'ready_for_transfer: true\n' +
+          'access_level: PUBLIC (tous les utilisateurs)\n' +
           '```')
         .setColor(0x00ff00)
         .setTimestamp()
         .setFooter({ 
-          text: '🎮 Prêt pour les transferts de maps Minecraft',
+          text: '🎮 Prêt pour les transferts de maps Minecraft - Accès libre',
           iconURL: this.client.user?.displayAvatarURL()
         })
         .addFields(
@@ -174,7 +175,8 @@ class MinecraftTransferBot {
             name: '🔧 Actions disponibles',
             value: '• Cliquez sur le bouton ci-dessous pour démarrer un transfert\n' +
                    '• Utilisez `/build transfer destination:staging`\n' +
-                   '• Surveillez les logs en temps réel',
+                   '• Surveillez les logs en temps réel\n' +
+                   '• ✨ **Tous les utilisateurs peuvent lancer un transfert**',
             inline: true
           }
         );
@@ -236,17 +238,8 @@ class MinecraftTransferBot {
 
   private async handleTransferButton(interaction: ButtonInteraction): Promise<void> {
     try {
-      // Vérifier les permissions
-      if (!interaction.memberPermissions?.has('Administrator')) {
-        await interaction.reply({
-          embeds: [EmbedGenerator.createErrorEmbed(
-            'Permissions insuffisantes',
-            'Seuls les administrateurs peuvent démarrer un transfert.'
-          )],
-          ephemeral: true
-        });
-        return;
-      }
+      // Log de l'utilisateur qui démarre le transfert (sans vérification de permissions)
+      Logger.info(`🚀 Transfert demandé par ${interaction.user.tag} (${interaction.user.id})`);
 
       // Vérifier les variables d'environnement
       const requiredEnvVars = [
@@ -344,10 +337,10 @@ class MinecraftTransferBot {
         components: [enabledRow]
       });
 
-      Logger.success(`Transfert terminé avec succès par ${interaction.user.tag} (via bouton)`);
+      Logger.success(`✅ Transfert terminé avec succès par ${interaction.user.tag} (via bouton)`);
 
     } catch (error: any) {
-      Logger.error('Erreur lors du transfert via bouton', error);
+      Logger.error('❌ Erreur lors du transfert via bouton', error);
 
       const errorEmbed = EmbedGenerator.createErrorEmbed(
         'Erreur lors du transfert',
@@ -391,6 +384,7 @@ class MinecraftTransferBot {
       
       Logger.success('🚀 Bot démarré avec succès !');
       Logger.info('💡 Pour déployer les commandes, utilisez: npm run deploy');
+      Logger.info('🔓 Mode accès libre activé - tous les utilisateurs peuvent lancer des transferts');
       
     } catch (error) {
       Logger.error('Erreur lors du démarrage du bot', error);
@@ -439,6 +433,7 @@ async function main(): Promise<void> {
     Logger.info(`📍 Environnement: ${process.env.NODE_ENV || 'development'}`);
     Logger.info(`🐧 Plateforme: ${process.platform}`);
     Logger.info(`🟢 Node.js: ${process.version}`);
+    Logger.info('🔓 Mode: Accès libre (tous les utilisateurs autorisés)');
 
     const bot = new MinecraftTransferBot();
     await bot.start();
