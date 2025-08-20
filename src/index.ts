@@ -245,8 +245,8 @@ class MinecraftTransferBot {
       const requiredEnvVars = [
         'SRV1_BASE_URL', 'SRV1_API_KEY', 'SRV1_SERVER_ID',
         'SRV2_BASE_URL', 'SRV2_API_KEY', 'SRV2_SERVER_ID',
-        'SRV1_SFTP_HOST', 'SRV1_SFTP_USER', 'SRV1_SFTP_PASSWORD',
-        'SRV2_SFTP_HOST', 'SRV2_SFTP_USER', 'SRV2_SFTP_PASSWORD'
+        'SRV1_SFTP_HOST', 'SRV1_SFTP_USER', 'SRV1_SFTP_PASSWORD', 'SRV1_SFTP_ROOT',
+        'SRV2_SFTP_HOST', 'SRV2_SFTP_USER', 'SRV2_SFTP_PASSWORD', 'SRV2_SFTP_ROOT'
       ];
 
       const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -271,7 +271,7 @@ class MinecraftTransferBot {
         sftpPort: parseInt(process.env.SRV1_SFTP_PORT || '2022'),
         sftpUser: process.env.SRV1_SFTP_USER!,
         sftpPassword: process.env.SRV1_SFTP_PASSWORD!,
-        worldPath: process.env.SRV1_WORLD_PATH || '/home/container/world'
+        sftpRoot: process.env.SRV1_SFTP_ROOT!
       };
 
       const srv2Config: ServerConfig = {
@@ -282,7 +282,7 @@ class MinecraftTransferBot {
         sftpPort: parseInt(process.env.SRV2_SFTP_PORT || '2022'),
         sftpUser: process.env.SRV2_SFTP_USER!,
         sftpPassword: process.env.SRV2_SFTP_PASSWORD!,
-        worldPath: process.env.SRV2_WORLD_PATH || '/home/container/world'
+        sftpRoot: process.env.SRV2_SFTP_ROOT!
       };
 
       // Désactiver le bouton pendant le transfert

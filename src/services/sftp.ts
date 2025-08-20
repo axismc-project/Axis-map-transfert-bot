@@ -43,28 +43,30 @@ export class SftpService {
 
   async downloadFile(remotePath: string, localPath: string, onProgress?: (progress: number) => void): Promise<void> {
     try {
-      Logger.info(`Téléchargement: ${remotePath} → ${localPath}`);
+      const fullRemotePath = `${this.config.sftpRoot}/${remotePath}`;
+      Logger.info(`📥 Téléchargement: ${fullRemotePath} → ${localPath}`);
       
       // Créer le dossier local si nécessaire
       await fs.ensureDir(path.dirname(localPath));
       
       // Téléchargement simple
-      await this.client.fastGet(remotePath, localPath);
+      await this.client.fastGet(fullRemotePath, localPath);
       
       if (onProgress) {
         onProgress(100);
       }
 
-      Logger.success(`Téléchargement terminé: ${localPath}`);
+      Logger.success(`✅ Téléchargement terminé: ${localPath}`);
     } catch (error: any) {
-      Logger.error(`Erreur lors du téléchargement`, error.message);
+      Logger.error(`❌ Erreur lors du téléchargement`, error.message);
       throw new Error(`Impossible de télécharger ${remotePath}: ${error.message}`);
     }
   }
 
   async uploadFile(localPath: string, remotePath: string, onProgress?: (progress: number) => void): Promise<void> {
     try {
-      Logger.info(`Upload: ${localPath} → ${remotePath}`);
+      const fullRemotePath = `${this.config.sftpRoot}/${remotePath}`;
+      Logger.info(`📤 Upload: ${localPath} → ${fullRemotePath}`);
       
       // Vérifier que le fichier local existe
       if (!await fs.pathExists(localPath)) {
@@ -72,22 +74,33 @@ export class SftpService {
       }
 
       // Upload simple
-      await this.client.fastPut(localPath, remotePath);
+      await this.client.fastPut(localPath, fullRemotePath);
       
       if (onProgress) {
         onProgress(100);
       }
 
-      Logger.success(`Upload terminé: ${remotePath}`);
+      Logger.success(`✅ Upload terminé: ${fullRemotePath}`);
     } catch (error: any) {
-      Logger.error(`Erreur lors de l'upload`, error.message);
+      Logger.error(`❌ Erreur lors de l'upload`, error.message);
       throw new Error(`Impossible d'uploader ${localPath}: ${error.message}`);
     }
   }
 
   async transferFileDirect(sourceService: SftpService, remotePath: string, destinationPath: string, onProgress?: (progress: number) => void): Promise<void> {
     try {
-      Logger.info(`Transfert direct: ${remotePath} → ${destinationPath}`);
+      const sourceFullPath = `${sourceService.config.sftpRoot}/${remotePath}`;
+      const destFullPath = `${this.config.sftpRoot}/${destinationPath}`;
+      
+      Logger.info(`🔄 Transfert direct: ${sourceFullPath} → ${destFullPath}`);
+      
+      // Vérifier que le fichier source existe
+      try {
+        const stat = await sourceService.client.stat(sourceFullPath);
+        Logger.info(`📊 Taille du fichier: ${Math.round(stat.size / 1024 / 1024)} MB`);
+      } catch (statError) {
+        throw new Error(`Fichier source introuvable: ${sourceFullPath}`);
+      }
       
       // Créer un fichier temporaire local pour le transfert
       const tempDir = process.env.TEMP_CACHE_PATH || '/tmp';
@@ -97,38 +110,39 @@ export class SftpService {
       try {
         // Télécharger depuis la source
         if (onProgress) onProgress(10);
-        await sourceService.downloadFile(remotePath, tempFile);
+        await sourceService.client.fastGet(sourceFullPath, tempFile);
 
         if (onProgress) onProgress(50);
         
         // Uploader vers la destination
-        await this.uploadFile(tempFile, destinationPath);
+        await this.client.fastPut(tempFile, destFullPath);
 
         if (onProgress) onProgress(100);
-        Logger.success(`Transfert direct terminé`);
+        Logger.success(`✅ Transfert direct terminé`);
       } finally {
         // Nettoyer le fichier temporaire
         try {
           await fs.remove(tempFile);
-          Logger.debug(`Fichier temporaire supprimé: ${tempFile}`);
+          Logger.debug(`🗑️ Fichier temporaire supprimé: ${tempFile}`);
         } catch (cleanupError) {
-          Logger.warning(`Impossible de supprimer le fichier temporaire`, cleanupError);
+          Logger.warning(`⚠️ Impossible de supprimer le fichier temporaire`, cleanupError);
         }
       }
     } catch (error: any) {
-      Logger.error(`Erreur lors du transfert direct`, error.message);
+      Logger.error(`❌ Erreur lors du transfert direct`, error.message);
       throw new Error(`Transfert direct échoué: ${error.message}`);
     }
   }
 
   async downloadFolder(remotePath: string, localPath: string): Promise<void> {
     try {
-      Logger.info(`Téléchargement du dossier: ${remotePath} → ${localPath}`);
+      const fullRemotePath = `${this.config.sftpRoot}/${remotePath}`;
+      Logger.info(`📁 Téléchargement du dossier: ${fullRemotePath} → ${localPath}`);
       
       await fs.ensureDir(localPath);
       
       // Lister les fichiers du dossier distant
-      const fileList = await this.client.list(remotePath);
+      const fileList = await this.client.list(fullRemotePath);
       
       for (const file of fileList) {
         if (file.type === 'd') {
@@ -144,20 +158,21 @@ export class SftpService {
         }
       }
       
-      Logger.success(`Dossier téléchargé: ${localPath}`);
+      Logger.success(`✅ Dossier téléchargé: ${localPath}`);
     } catch (error: any) {
-      Logger.error(`Erreur lors du téléchargement du dossier`, error.message);
+      Logger.error(`❌ Erreur lors du téléchargement du dossier`, error.message);
       throw new Error(`Impossible de télécharger le dossier ${remotePath}: ${error.message}`);
     }
   }
 
   async uploadFolder(localPath: string, remotePath: string): Promise<void> {
     try {
-      Logger.info(`Upload du dossier: ${localPath} → ${remotePath}`);
+      const fullRemotePath = `${this.config.sftpRoot}/${remotePath}`;
+      Logger.info(`📁 Upload du dossier: ${localPath} → ${fullRemotePath}`);
       
       // Créer le dossier distant
       try {
-        await this.client.mkdir(remotePath, true);
+        await this.client.mkdir(fullRemotePath, true);
       } catch (error) {
         // Le dossier existe peut-être déjà
       }
@@ -179,16 +194,17 @@ export class SftpService {
         }
       }
       
-      Logger.success(`Dossier uploadé: ${remotePath}`);
+      Logger.success(`✅ Dossier uploadé: ${fullRemotePath}`);
     } catch (error: any) {
-      Logger.error(`Erreur lors de l'upload du dossier`, error.message);
+      Logger.error(`❌ Erreur lors de l'upload du dossier`, error.message);
       throw new Error(`Impossible d'uploader le dossier ${localPath}: ${error.message}`);
     }
   }
 
   async fileExists(remotePath: string): Promise<boolean> {
     try {
-      await this.client.stat(remotePath);
+      const fullRemotePath = `${this.config.sftpRoot}/${remotePath}`;
+      await this.client.stat(fullRemotePath);
       return true;
     } catch (error) {
       return false;
@@ -197,11 +213,12 @@ export class SftpService {
 
   async deleteFile(remotePath: string): Promise<void> {
     try {
-      Logger.info(`Suppression SFTP: ${remotePath}`);
-      await this.client.delete(remotePath);
-      Logger.success(`Fichier supprimé via SFTP`);
+      const fullRemotePath = `${this.config.sftpRoot}/${remotePath}`;
+      Logger.info(`🗑️ Suppression SFTP: ${fullRemotePath}`);
+      await this.client.delete(fullRemotePath);
+      Logger.success(`✅ Fichier supprimé via SFTP`);
     } catch (error: any) {
-      Logger.error(`Erreur lors de la suppression SFTP`, error.message);
+      Logger.error(`❌ Erreur lors de la suppression SFTP`, error.message);
       throw new Error(`Impossible de supprimer via SFTP ${remotePath}: ${error.message}`);
     }
   }
