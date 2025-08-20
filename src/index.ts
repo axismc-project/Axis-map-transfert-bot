@@ -9,7 +9,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ButtonInteraction
+  ButtonInteraction,
+  TextBasedChannel
 } from 'discord.js';
 import { config } from 'dotenv';
 import { Logger } from './utils/logger.js';
@@ -33,6 +34,11 @@ interface TransferStatusUpdate {
   speed: number;
   eta: number;
 }
+
+// ✅ Type pour les canaux où on peut envoyer des messages
+type SendableChannel = TextBasedChannel & {
+  send: (options: any) => Promise<any>;
+};
 
 class MinecraftTransferBot {
   private client: Client;
@@ -139,7 +145,7 @@ class MinecraftTransferBot {
           type: ActivityType.Custom 
         });
       }
-    }, 5000); // ✅ Statut Discord toutes les 5 secondes
+    }, 5000); // Statut Discord toutes les 5 secondes
   }
 
   private stopStatusUpdates(): void {
@@ -173,21 +179,21 @@ class MinecraftTransferBot {
 
       // Créer l'embed de démarrage
       const embed = new EmbedBuilder()
-        .setTitle('🚀 Minecraft Transfer Bot v3.0 - Optimisé!')
+        .setTitle('🚀 Minecraft Transfer Bot v3.1 - Messages Normaux!')
         .setDescription('```yaml\n' +
           '# ========================================\n' +
-          '# MINECRAFT MAP TRANSFER SYSTEM v3.0\n' +
+          '# MINECRAFT MAP TRANSFER SYSTEM v3.1\n' +
           '# ========================================\n' +
           '\n' +
           'status: ONLINE ✅\n' +
-          'version: v3.0.0\n' +
+          'version: v3.1.0\n' +
           'uptime: Just started\n' +
           '\n' +
           'services:\n' +
           '  - discord_bot: READY\n' +
           '  - pterodactyl_api: ENHANCED\n' +
           '  - sftp_transfer: OPTIMIZED\n' +
-          '  - extraction_polling: INTELLIGENT\n' +
+          '  - extraction_polling: FIXED\n' +
           '\n' +
           'servers:\n' +
           '  source: BUILD_SERVER\n' +
@@ -198,16 +204,17 @@ class MinecraftTransferBot {
           '  - playerdata_backup: ENABLED\n' +
           '  - progress_tracking: REAL_TIME\n' +
           '  - rollback_protection: ENHANCED\n' +
+          '  - message_updates: NORMAL_MESSAGES\n' +
+          '  - embed_updates: 5 SECONDS\n' +
           '  - status_updates: 5 SECONDS\n' +
-          '  - embed_updates: 2 SECONDS\n' +
-          '  - smart_extraction: POLLING\n' +
-          '  - webhooks: DISABLED\n' +
+          '  - extraction_fix: ARRAY_SAFE\n' +
           '\n' +
           'optimizations:\n' +
-          '  - no_webhook_delays: TRUE\n' +
+          '  - no_webhook_tokens: TRUE\n' +
+          '  - normal_messages: STABLE\n' +
           '  - smart_polling: 5s_intervals\n' +
-          '  - timeout_handling: INTELLIGENT\n' +
-          '  - embed_refresh: 2s\n' +
+          '  - extraction_safe: NULL_CHECKS\n' +
+          '  - embed_refresh: 5s\n' +
           '  - status_refresh: 5s\n' +
           '\n' +
           'ready_for_transfer: true\n' +
@@ -216,7 +223,7 @@ class MinecraftTransferBot {
         .setColor(0x00ff00)
         .setTimestamp()
         .setFooter({ 
-          text: '🎮 v3.0 - Sans webhooks - Extraction intelligente - Status 5s/Embed 2s',
+          text: '🎮 v3.1 - Messages normaux - Extraction corrigée - Stable',
           iconURL: this.client.user?.displayAvatarURL()
         })
         .addFields(
@@ -231,13 +238,13 @@ class MinecraftTransferBot {
             inline: true
           },
           {
-            name: '🔧 Nouveautés v3.0',
-            value: '• **Webhooks supprimés** (plus de délais)\n' +
-                   '• **Extraction intelligente** avec polling\n' +
-                   '• **Gestion des timeouts** améliorée\n' +
+            name: '🔧 Nouveautés v3.1',
+            value: '• **Messages normaux** (plus de webhooks)\n' +
+                   '• **Extraction corrigée** (null checks)\n' +
+                   '• **Polling sécurisé** avec gestion d\'erreurs\n' +
                    '• **Statut Discord** (5 secondes)\n' +
-                   '• **Embeds** (2 secondes)\n' +
-                   '• **Performance optimisée** maximale',
+                   '• **Embeds stables** (5 secondes)\n' +
+                   '• **Performance maximale** garantie',
             inline: true
           }
         );
@@ -245,7 +252,7 @@ class MinecraftTransferBot {
       // Créer le bouton de transfert
       const transferButton = new ButtonBuilder()
         .setCustomId('start_transfer')
-        .setLabel('🚀 Démarrer Transfert v3.0')
+        .setLabel('🚀 Démarrer Transfert v3.1')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('⚡');
 
@@ -258,7 +265,7 @@ class MinecraftTransferBot {
         components: [row]
       });
 
-      Logger.success(`✅ Embed de démarrage v3.0 envoyé dans le canal ${channelId}`);
+      Logger.success(`✅ Embed de démarrage v3.1 envoyé dans le canal ${channelId}`);
 
     } catch (error: any) {
       Logger.error('Erreur lors de l\'envoi de l\'embed de démarrage', error);
@@ -297,10 +304,17 @@ class MinecraftTransferBot {
     }
   }
 
+  // ✅ Helper function simplifiée pour vérifier si le canal peut envoyer des messages
+  private isSendableChannel(channel: any): channel is SendableChannel {
+    return channel && 
+           typeof channel.send === 'function' && 
+           channel.isTextBased && 
+           channel.isTextBased();
+  }
+
   private async handleTransferButton(interaction: ButtonInteraction): Promise<void> {
     try {
-      // Log de l'utilisateur qui démarre le transfert
-      Logger.info(`🚀 Transfert v3.0 demandé par ${interaction.user.tag} (${interaction.user.id})`);
+      Logger.info(`🚀 Transfert v3.1 demandé par ${interaction.user.tag} (${interaction.user.id})`);
 
       // Vérifier les variables d'environnement
       const requiredEnvVars = [
@@ -346,28 +360,37 @@ class MinecraftTransferBot {
         sftpRoot: process.env.SRV2_SFTP_ROOT!
       };
 
-      // Désactiver le bouton pendant le transfert
-      const disabledButton = new ButtonBuilder()
-        .setCustomId('start_transfer')
-        .setLabel('⚡ Transfert v3.0 en cours...')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔄')
-        .setDisabled(true);
-
-      const disabledRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(disabledButton);
-
-      // Réponse initiale
-      const initialEmbed = EmbedGenerator.createInitialEmbed();
-      await interaction.reply({ 
-        embeds: [initialEmbed],
-        components: [disabledRow]
+      // ✅ RÉPONSE IMMÉDIATE À L'INTERACTION (évite timeout)
+      await interaction.reply({
+        content: '🚀 **Transfert v3.1 démarré !** Message de suivi envoyé ci-dessous...',
+        ephemeral: false
       });
+
+      // ✅ OBTENIR LE CANAL ET VÉRIFIER QU'IL PEUT ENVOYER DES MESSAGES
+      const channel = interaction.channel;
+      if (!this.isSendableChannel(channel)) {
+        await interaction.followUp({ 
+          content: '❌ Impossible d\'accéder au canal pour le suivi.',
+          ephemeral: true 
+        });
+        return;
+      }
+
+      // Créer l'embed initial
+      const initialEmbed = EmbedGenerator.createInitialEmbed();
+      
+      // ✅ ENVOYER UN MESSAGE NORMAL (pas d'interaction)
+      const trackingMessage = await channel.send({
+        embeds: [initialEmbed],
+        content: `📊 **Suivi du transfert v3.1 demandé par ${interaction.user}**`
+      });
+
+      Logger.success(`✅ Message de suivi créé: ${trackingMessage.id}`);
 
       // Créer le service de transfert
       const transferService = new TransferService(srv1Config, srv2Config);
       
-      // Configurer le callback de mise à jour du statut
+      // Configurer le callback de mise à jour du statut Discord
       transferService.setStatusUpdateCallback((status) => {
         this.updateTransferStatus(status);
       });
@@ -376,45 +399,39 @@ class MinecraftTransferBot {
       this.startStatusUpdates();
 
       try {
-        // Démarrer le transfert avec mise à jour en temps réel toutes les 2 secondes
+        // ✅ TRANSFERT AVEC MISES À JOUR DU MESSAGE NORMAL
         let lastUpdateTime = 0;
         
         await transferService.executeTransfer((tracker) => {
           const now = Date.now();
-          // ✅ Mettre à jour l'embed toutes les 2 secondes maximum
-          if (now - lastUpdateTime >= 2000) {
+          // Mettre à jour le message normal toutes les 5 secondes
+          if (now - lastUpdateTime >= 5000) {
             const embed = EmbedGenerator.createTransferEmbed(tracker);
-            interaction.editReply({ 
+            
+            // ✅ ÉDITER LE MESSAGE NORMAL (pas de webhook)
+            trackingMessage.edit({ 
               embeds: [embed],
-              components: [disabledRow]
-            }).catch(error => {
-              Logger.warning('Impossible de mettre à jour l\'embed', error);
+              content: `📊 **Suivi du transfert v3.1 demandé par ${interaction.user}** - 🔄 En cours...`
+            }).catch((error: any) => {
+              Logger.warning('Impossible de mettre à jour le message de suivi', error);
             });
+            
             lastUpdateTime = now;
           }
         });
 
-        // Message final de succès avec bouton réactivé
+        // ✅ MESSAGE FINAL DE SUCCÈS
         const successEmbed = EmbedGenerator.createSuccessEmbed(
-          'Transfert v3.0 terminé !',
-          'La map a été transférée avec succès avec la nouvelle extraction intelligente !'
+          'Transfert v3.1 terminé !',
+          'La map a été transférée avec succès avec l\'extraction corrigée !'
         );
 
-        const enabledButton = new ButtonBuilder()
-          .setCustomId('start_transfer')
-          .setLabel('🚀 Nouveau Transfert v3.0')
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji('⚡');
-
-        const enabledRow = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(enabledButton);
-
-        await interaction.editReply({ 
+        await trackingMessage.edit({ 
           embeds: [successEmbed],
-          components: [enabledRow]
+          content: `📊 **Transfert v3.1 demandé par ${interaction.user}** - ✅ **TERMINÉ AVEC SUCCÈS !**`
         });
 
-        Logger.success(`✅ Transfert v3.0 terminé avec succès par ${interaction.user.tag} (via bouton)`);
+        Logger.success(`✅ Transfert v3.1 terminé avec succès par ${interaction.user.tag} (via bouton)`);
 
       } finally {
         // Arrêter les mises à jour du statut
@@ -422,36 +439,54 @@ class MinecraftTransferBot {
       }
 
     } catch (error: any) {
-      Logger.error('❌ Erreur lors du transfert v3.0 via bouton', error);
+      Logger.error('❌ Erreur lors du transfert v3.1 via bouton', error);
 
       // Arrêter les mises à jour du statut en cas d'erreur
       this.stopStatusUpdates();
 
-      const errorEmbed = EmbedGenerator.createErrorEmbed(
-        'Erreur lors du transfert v3.0',
-        `Erreur: ${error.message}`
-      );
-
-      // Réactiver le bouton en cas d'erreur
-      const enabledButton = new ButtonBuilder()
-        .setCustomId('start_transfer')
-        .setLabel('🚀 Réessayer v3.0')
-        .setStyle(ButtonStyle.Danger)
-        .setEmoji('🔄');
-
-      const enabledRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(enabledButton);
-
       try {
-        await interaction.editReply({ 
-          embeds: [errorEmbed],
-          components: [enabledRow]
-        });
+        // Essayer de mettre à jour le message de suivi avec l'erreur
+        const errorEmbed = EmbedGenerator.createErrorEmbed(
+          'Erreur lors du transfert v3.1',
+          `Erreur: ${error.message}`
+        );
+
+        // Si on a accès au canal, chercher le message de suivi
+        const channel = interaction.channel;
+        if (this.isSendableChannel(channel)) {
+          // Trouver le dernier message de suivi (envoyé par le bot)
+          const messages = await channel.messages.fetch({ limit: 10 });
+          const trackingMessage = messages.find(msg => 
+            msg.author.id === this.client.user?.id && 
+            msg.content.includes(`Suivi du transfert v3.1 demandé par ${interaction.user}`)
+          );
+
+          if (trackingMessage) {
+            await trackingMessage.edit({ 
+              embeds: [errorEmbed],
+              content: `📊 **Transfert v3.1 demandé par ${interaction.user}** - ❌ **ERREUR**`
+            });
+          } else {
+            // Fallback: envoyer un nouveau message d'erreur
+            await channel.send({
+              embeds: [errorEmbed],
+              content: `❌ **Erreur du transfert v3.1 demandé par ${interaction.user}**`
+            });
+          }
+        }
+
       } catch (editError) {
-        await interaction.followUp({ 
-          embeds: [errorEmbed], 
-          ephemeral: true 
-        });
+        Logger.error('❌ Impossible de mettre à jour le message d\'erreur', editError);
+        
+        // Fallback ultime: followUp sur l'interaction
+        try {
+          await interaction.followUp({ 
+            content: `❌ **Erreur lors du transfert v3.1**: ${error.message}`,
+            ephemeral: true 
+          });
+        } catch (followUpError) {
+          Logger.error('❌ Impossible d\'envoyer le followUp d\'erreur', followUpError);
+        }
       }
     }
   }
@@ -467,32 +502,32 @@ class MinecraftTransferBot {
       // Connecter le bot
       await this.client.login(token);
       
-      Logger.success('🚀 Bot v3.0 démarré avec succès !');
+      Logger.success('🚀 Bot v3.1 démarré avec succès !');
       Logger.info('💡 Pour déployer les commandes, utilisez: npm run deploy');
       Logger.info('🔓 Mode accès libre activé - tous les utilisateurs peuvent lancer des transferts');
       Logger.info('📱 Statut Discord mis à jour toutes les 5 secondes pendant les transferts');
-      Logger.info('📋 Embeds mis à jour toutes les 2 secondes pendant les transferts');
-      Logger.info('🚫 Webhooks désactivés pour optimiser les performances');
-      Logger.info('🔍 Extraction intelligente avec polling automatique');
+      Logger.info('📋 Embeds mis à jour toutes les 5 secondes (messages normaux)');
+      Logger.info('🚫 Webhooks complètement supprimés');
+      Logger.info('🔍 Extraction corrigée avec vérifications null/undefined');
       
     } catch (error) {
-      Logger.error('Erreur lors du démarrage du bot v3.0', error);
+      Logger.error('Erreur lors du démarrage du bot v3.1', error);
       throw error;
     }
   }
 
   async shutdown(): Promise<void> {
     try {
-      Logger.info('Fermeture du bot v3.0...');
+      Logger.info('Fermeture du bot v3.1...');
       
       // Arrêter les mises à jour du statut
       this.stopStatusUpdates();
       
       this.client.destroy();
-      Logger.success('Bot v3.0 fermé proprement');
+      Logger.success('Bot v3.1 fermé proprement');
       process.exit(0);
     } catch (error) {
-      Logger.error('Erreur lors de la fermeture v3.0', error);
+      Logger.error('Erreur lors de la fermeture v3.1', error);
       process.exit(1);
     }
   }
@@ -522,21 +557,21 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    Logger.info('🚀 Démarrage du Minecraft Transfer Bot v3.0...');
+    Logger.info('🚀 Démarrage du Minecraft Transfer Bot v3.1...');
     Logger.info(`📍 Environnement: ${process.env.NODE_ENV || 'development'}`);
     Logger.info(`🐧 Plateforme: ${process.platform}`);
     Logger.info(`🟢 Node.js: ${process.version}`);
     Logger.info('🔓 Mode: Accès libre (tous les utilisateurs autorisés)');
     Logger.info('📱 Statut Discord: Mise à jour automatique (5 secondes)');
-    Logger.info('📋 Embeds: Rafraîchissement (2 secondes)');
-    Logger.info('🚫 Webhooks: Complètement désactivés');
-    Logger.info('🔍 Extraction: Polling intelligent avec détection automatique');
+    Logger.info('📋 Embeds: Messages normaux (5 secondes)');
+    Logger.info('🚫 Webhooks: Complètement supprimés');
+    Logger.info('🔍 Extraction: Polling sécurisé avec null checks');
 
     const bot = new MinecraftTransferBot();
     await bot.start();
 
   } catch (error) {
-    Logger.error('Erreur fatale lors du démarrage v3.0', error);
+    Logger.error('Erreur fatale lors du démarrage v3.1', error);
     process.exit(1);
   }
 }

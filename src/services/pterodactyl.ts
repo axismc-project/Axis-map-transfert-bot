@@ -156,13 +156,26 @@ export class PterodactylService {
     }
   }
 
-  // ✅ NOUVELLE MÉTHODE : Extraction avec polling intelligent
+  // ✅ MÉTHODE CORRIGÉE : Extraction avec polling intelligent
   async extractArchive(archivePath: string, destination: string = '/'): Promise<void> {
     try {
       Logger.info(`📂 Extraction de l'archive: ${archivePath} vers ${destination}`);
       Logger.info(`🔄 Démarrage de l'extraction (peut timeout mais continue en arrière-plan)`);
       
       const startTime = Date.now();
+      
+      // ✅ OBTENIR LA LISTE DES FICHIERS AVANT EXTRACTION
+      let filesBefore: FileObject[] = [];
+      try {
+        filesBefore = await this.listFiles(destination);
+        Logger.info(`📋 Fichiers avant extraction: ${filesBefore.length} éléments`);
+      } catch (listError) {
+        Logger.warning(`⚠️ Impossible de lister les fichiers avant extraction: ${listError}`);
+        filesBefore = []; // Continuer avec une liste vide
+      }
+      
+      const hasArchiveBefore = filesBefore.some(f => f?.name === archivePath);
+      Logger.info(`📦 Archive présente avant extraction: ${hasArchiveBefore ? 'OUI' : 'NON'}`);
       
       // 1. Lancer l'extraction (peut timeout mais continue en arrière-plan selon les issues GitHub)
       try {
@@ -191,22 +204,32 @@ export class PterodactylService {
       const maxPollingAttempts = 60; // 60 tentatives = 5 minutes max
       const pollingInterval = 5000; // 5 secondes entre chaque vérification
 
-      // Obtenir la liste des fichiers avant extraction (pour comparaison)
-      const filesBefore = await this.listFiles(destination);
-      const hasArchiveBefore = filesBefore.some(f => f.name === archivePath);
-      
       while (pollingAttempts < maxPollingAttempts) {
         await new Promise(resolve => setTimeout(resolve, pollingInterval));
         pollingAttempts++;
         
         try {
-          const filesAfter = await this.listFiles(destination);
-          const hasArchiveAfter = filesAfter.some(f => f.name === archivePath);
+          // ✅ VÉRIFICATION AVEC GESTION D'ERREUR
+          let filesAfter: FileObject[] = [];
+          try {
+            filesAfter = await this.listFiles(destination);
+          } catch (listError) {
+            Logger.warning(`⚠️ Erreur de polling (tentative ${pollingAttempts}): ${listError}`);
+            continue; // Continuer le polling malgré l'erreur
+          }
           
-          // Vérifier si de nouveaux fichiers sont apparus (signe que l'extraction a eu lieu)
-          const newFiles = filesAfter.filter(fileAfter => 
-            !filesBefore.some(fileBefore => fileBefore.name === fileAfter.name)
-          );
+          // Vérifier si l'archive est toujours présente
+          const hasArchiveAfter = filesAfter.some(f => f?.name === archivePath);
+          
+          // ✅ VÉRIFICATION SÉCURISÉE DES NOUVEAUX FICHIERS
+          const newFiles = filesAfter.filter(fileAfter => {
+            if (!fileAfter || !fileAfter.name) return false;
+            return !filesBefore.some(fileBefore => 
+              fileBefore && fileBefore.name === fileAfter.name
+            );
+          });
+          
+          Logger.info(`📊 Polling ${pollingAttempts}/${maxPollingAttempts}: ${filesAfter.length} fichiers, ${newFiles.length} nouveaux, archive présente: ${hasArchiveAfter ? 'OUI' : 'NON'}`);
           
           // Si on a de nouveaux fichiers (hors archive) ou si l'archive a disparu, extraction terminée
           if (newFiles.length > 0 || (hasArchiveBefore && !hasArchiveAfter)) {
@@ -214,8 +237,6 @@ export class PterodactylService {
             Logger.success(`✅ Archive extraite avec succès en ${totalDuration}s (détectée par polling après ${pollingAttempts} tentatives)`);
             return;
           }
-          
-          Logger.info(`⏳ Extraction en cours... (tentative ${pollingAttempts}/${maxPollingAttempts})`);
           
         } catch (pollingError) {
           Logger.warning(`⚠️ Erreur de polling (tentative ${pollingAttempts}): ${pollingError}`);
