@@ -53,6 +53,7 @@ export class TransferService {
       });
 
       // Étape 2: Arrêt des serveurs
+      // Étape 2: Arrêt des serveurs
       await this.executeStep(1, 'Arrêt srv1 & srv2', async () => {
         this.tracker.updateStep(1, 'running', 'Arrêt du serveur Build...', 25);
         progressCallback?.(this.tracker);
@@ -62,11 +63,11 @@ export class TransferService {
         progressCallback?.(this.tracker);
         await this.srv2Ptero.setPowerState('stop');
 
-        this.tracker.updateStep(1, 'running', 'Attente arrêt complet...', 75);
+        this.tracker.updateStep(1, 'running', 'Attente arrêt complet (30s)...', 75);
         progressCallback?.(this.tracker);
         await Promise.all([
-          this.srv1Ptero.waitForServerState('offline', 60000),
-          this.srv2Ptero.waitForServerState('offline', 60000)
+          this.srv1Ptero.waitForServerState('offline', 30000),
+          this.srv2Ptero.waitForServerState('offline', 30000)
         ]);
       });
 
@@ -153,28 +154,28 @@ export class TransferService {
         await this.restorePlayerData(progressCallback);
       });
 
-      // Étape 10: Redémarrage des serveurs
-      await this.executeStep(9, 'Redémarrage serveurs', async () => {
-        this.tracker.updateStep(9, 'running', 'Démarrage du serveur Build...', 25);
-        progressCallback?.(this.tracker);
-        await this.srv1Ptero.setPowerState('start');
+// Étape 10: Redémarrage des serveurs
+await this.executeStep(9, 'Redémarrage serveurs', async () => {
+  this.tracker.updateStep(9, 'running', 'Démarrage du serveur Build...', 25);
+  progressCallback?.(this.tracker);
+  await this.srv1Ptero.setPowerState('start');
 
-        this.tracker.updateStep(9, 'running', 'Démarrage du serveur Staging...', 50);
-        progressCallback?.(this.tracker);
-        await this.srv2Ptero.setPowerState('start');
+  this.tracker.updateStep(9, 'running', 'Démarrage du serveur Staging...', 50);
+  progressCallback?.(this.tracker);
+  await this.srv2Ptero.setPowerState('start');
 
-        this.tracker.updateStep(9, 'running', 'Attente démarrage complet...', 75);
-        progressCallback?.(this.tracker);
-        await Promise.all([
-          this.srv1Ptero.waitForServerState('running', 120000),
-          this.srv2Ptero.waitForServerState('running', 120000)
-        ]);
-      });
+  this.tracker.updateStep(9, 'running', 'Attente démarrage complet (30s)...', 75);
+  progressCallback?.(this.tracker);
+  await Promise.all([
+    this.srv1Ptero.waitForServerState('running', 30000),
+    this.srv2Ptero.waitForServerState('running', 30000)
+  ]);
+});
 
       Logger.success('🎉 Transfert de map terminé avec succès !');
-      } catch (error: any) {
+    } catch (error: any) {
       Logger.error('❌ Erreur lors du transfert', error);
-      
+
       // Marquer l'étape actuelle comme erreur
       const currentStep = this.tracker.getCurrentStep();
       if (currentStep >= 0) {
@@ -196,9 +197,9 @@ export class TransferService {
     try {
       Logger.info(`🔄 Étape ${stepIndex + 1}: ${stepName}`);
       this.tracker.updateStep(stepIndex, 'running', 'En cours...', 0);
-      
+
       await operation();
-      
+
       this.tracker.updateStep(stepIndex, 'completed', 'Terminé', 100);
       Logger.success(`✅ Étape ${stepIndex + 1} terminée: ${stepName}`);
     } catch (error) {
@@ -211,26 +212,26 @@ export class TransferService {
     try {
       this.tracker.updateStep(3, 'running', 'Vérification playerdata...', 25);
       progressCallback?.(this.tracker);
-      
+
       // Vérifier si le dossier playerdata existe
       const playerdataExists = await this.srv2Sftp.fileExists(`${this.srv2Config.worldPath}/playerdata`);
-      
+
       if (playerdataExists) {
         this.tracker.updateStep(3, 'running', 'Sauvegarde playerdata...', 50);
         progressCallback?.(this.tracker);
-        
+
         // Créer le dossier de cache temporaire
         await fs.ensureDir(this.tempCachePath);
-        
+
         // Télécharger le dossier playerdata
         await this.srv2Sftp.downloadFolder(
           `${this.srv2Config.worldPath}/playerdata`,
           path.join(this.tempCachePath, 'playerdata')
         );
-        
+
         this.tracker.updateStep(3, 'running', 'Sauvegarde terminée', 100);
         progressCallback?.(this.tracker);
-        
+
         Logger.success('PlayerData sauvegardé dans le cache temporaire');
       } else {
         Logger.warning('Aucun dossier playerdata trouvé sur srv2, création d\'un dossier vide');
@@ -246,7 +247,7 @@ export class TransferService {
     try {
       this.tracker.updateStep(8, 'running', 'Suppression playerdata srv1...', 25);
       progressCallback?.(this.tracker);
-      
+
       // Supprimer le playerdata de la map srv1 (nouvelle map)
       try {
         await this.srv2Ptero.deleteFolder('world/playerdata');
@@ -257,21 +258,21 @@ export class TransferService {
 
       this.tracker.updateStep(8, 'running', 'Restauration playerdata srv2...', 50);
       progressCallback?.(this.tracker);
-      
+
       // Vérifier si nous avons une sauvegarde
       const backupPath = path.join(this.tempCachePath, 'playerdata');
       const backupExists = await fs.pathExists(backupPath);
-      
+
       if (backupExists) {
         // Restaurer le playerdata sauvegardé
         await this.srv2Sftp.uploadFolder(
           backupPath,
           `${this.srv2Config.worldPath}/playerdata`
         );
-        
+
         this.tracker.updateStep(8, 'running', 'Restauration terminée', 100);
         progressCallback?.(this.tracker);
-        
+
         Logger.success('PlayerData de srv2 restauré');
       } else {
         Logger.warning('Aucune sauvegarde playerdata trouvée');
@@ -284,7 +285,7 @@ export class TransferService {
       } catch (cleanupError) {
         Logger.warning('Impossible de nettoyer le cache temporaire', cleanupError);
       }
-      
+
     } catch (error: any) {
       Logger.error('Erreur lors de la restauration playerdata', error);
       throw new Error(`Impossible de restaurer playerdata: ${error.message}`);
@@ -294,7 +295,7 @@ export class TransferService {
   private async handleRollback(): Promise<void> {
     try {
       Logger.warning('🔄 Tentative de rollback...');
-      
+
       // Redémarrer les serveurs s'ils sont arrêtés
       try {
         await Promise.all([
