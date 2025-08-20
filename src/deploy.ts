@@ -49,8 +49,16 @@ async function deployCommands(): Promise<void> {
       Logger.info('ℹ️  Les commandes globales peuvent prendre jusqu\'à 1 heure pour être disponibles');
     }
 
-  } catch (error) {
+  } catch (error: any) {
     Logger.error('❌ Erreur lors du déploiement des commandes', error);
+    
+    if (error.code === 50001) {
+      Logger.error('❌ Permissions insuffisantes. Vérifiez que le bot a le scope "applications.commands"');
+    }
+    if (error.code === 50035) {
+      Logger.error('❌ Données de commande invalides. Vérifiez la structure de vos commandes');
+    }
+    
     process.exit(1);
   }
 }
@@ -74,13 +82,46 @@ async function clearCommands(): Promise<void> {
     if (guildId) {
       await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] });
       Logger.success('✅ Commandes de guilde supprimées');
-    } else {
-      await rest.put(Routes.applicationCommands(clientId), { body: [] });
-      Logger.success('✅ Commandes globales supprimées');
+    }
+    
+    // Toujours nettoyer les commandes globales aussi
+    await rest.put(Routes.applicationCommands(clientId), { body: [] });
+    Logger.success('✅ Commandes globales supprimées');
+
+  } catch (error: any) {
+    Logger.error('❌ Erreur lors de la suppression des commandes', error);
+    process.exit(1);
+  }
+}
+
+// Fonction pour lister les commandes existantes
+async function listCommands(): Promise<void> {
+  const token = process.env.DISCORD_TOKEN;
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const guildId = process.env.DISCORD_GUILD_ID;
+
+  if (!token || !clientId) {
+    Logger.error('DISCORD_TOKEN et DISCORD_CLIENT_ID sont requis');
+    process.exit(1);
+  }
+
+  const rest = new REST().setToken(token);
+
+  try {
+    Logger.info('📋 Liste des commandes existantes...');
+
+    if (guildId) {
+      const guildCommands = await rest.get(Routes.applicationGuildCommands(clientId, guildId)) as any[];
+      Logger.info(`🏠 Commandes de guilde (${guildCommands.length}) :`);
+      guildCommands.forEach(cmd => Logger.info(`  - ${cmd.name}: ${cmd.description}`));
     }
 
-  } catch (error) {
-    Logger.error('❌ Erreur lors de la suppression des commandes', error);
+    const globalCommands = await rest.get(Routes.applicationCommands(clientId)) as any[];
+    Logger.info(`🌍 Commandes globales (${globalCommands.length}) :`);
+    globalCommands.forEach(cmd => Logger.info(`  - ${cmd.name}: ${cmd.description}`));
+
+  } catch (error: any) {
+    Logger.error('❌ Erreur lors de la liste des commandes', error);
     process.exit(1);
   }
 }
@@ -91,6 +132,17 @@ const action = process.argv[2];
 switch (action) {
   case 'clear':
     clearCommands();
+    break;
+  case 'list':
+    listCommands();
+    break;
+  case 'guild':
+    // Force le déploiement en guilde même si DISCORD_GUILD_ID n'est pas défini
+    if (!process.env.DISCORD_GUILD_ID) {
+      Logger.error('DISCORD_GUILD_ID est requis pour le déploiement en guilde');
+      process.exit(1);
+    }
+    deployCommands();
     break;
   case 'deploy':
   default:

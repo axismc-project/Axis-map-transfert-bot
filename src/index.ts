@@ -2,8 +2,6 @@ import {
   Client, 
   GatewayIntentBits, 
   Collection, 
-  REST, 
-  Routes,
   CommandInteraction,
   ActivityType
 } from 'discord.js';
@@ -55,6 +53,9 @@ class MinecraftTransferBot {
       this.client.user.setActivity('Transferts Minecraft', { 
         type: ActivityType.Watching 
       });
+
+      // Afficher les commandes disponibles
+      Logger.info(`📋 Commandes disponibles: ${Array.from(this.commands.keys()).join(', ')}`);
     });
 
     // Event: Interaction créée (slash commands)
@@ -91,6 +92,14 @@ class MinecraftTransferBot {
       Logger.error('Erreur Discord.js', error);
     });
 
+    // Event: Debug (optionnel, pour le développement)
+    if (process.env.NODE_ENV === 'development') {
+      this.client.on('debug', (info) => {
+        if (info.includes('Heartbeat')) return; // Ignorer les heartbeats
+        Logger.debug(`Discord Debug: ${info}`);
+      });
+    }
+
     // Gestion des erreurs non capturées
     process.on('unhandledRejection', (reason, promise) => {
       Logger.error('Promesse rejetée non gérée', { reason, promise });
@@ -113,32 +122,6 @@ class MinecraftTransferBot {
     });
   }
 
-  async deployCommands(): Promise<void> {
-    const token = process.env.DISCORD_TOKEN;
-    const clientId = process.env.DISCORD_CLIENT_ID;
-
-    if (!token || !clientId) {
-      throw new Error('DISCORD_TOKEN et DISCORD_CLIENT_ID sont requis');
-    }
-
-    const rest = new REST().setToken(token);
-    const commandsData = Array.from(this.commands.values()).map(command => command.data.toJSON());
-
-    try {
-      Logger.info(`🔄 Déploiement de ${commandsData.length} commande(s)...`);
-
-      const data = await rest.put(
-        Routes.applicationCommands(clientId),
-        { body: commandsData }
-      ) as any[];
-
-      Logger.success(`✅ ${data.length} commande(s) déployée(s) avec succès !`);
-    } catch (error) {
-      Logger.error('Erreur lors du déploiement des commandes', error);
-      throw error;
-    }
-  }
-
   async start(): Promise<void> {
     const token = process.env.DISCORD_TOKEN;
     
@@ -147,13 +130,12 @@ class MinecraftTransferBot {
     }
 
     try {
-      // Déployer les commandes
-      await this.deployCommands();
-      
-      // Connecter le bot
+      // Connecter le bot (les commandes doivent être déployées séparément)
       await this.client.login(token);
       
       Logger.success('🚀 Bot démarré avec succès !');
+      Logger.info('💡 Pour déployer les commandes, utilisez: npm run deploy');
+      
     } catch (error) {
       Logger.error('Erreur lors du démarrage du bot', error);
       throw error;
@@ -171,6 +153,17 @@ class MinecraftTransferBot {
       process.exit(1);
     }
   }
+
+  // Méthode utilitaire pour obtenir des statistiques
+  getStats() {
+    return {
+      guilds: this.client.guilds.cache.size,
+      users: this.client.users.cache.size,
+      commands: this.commands.size,
+      uptime: this.client.uptime,
+      ping: this.client.ws.ping
+    };
+  }
 }
 
 // Fonction principale
@@ -182,6 +175,7 @@ async function main(): Promise<void> {
     
     if (missingEnv.length > 0) {
       Logger.error(`Variables d'environnement manquantes: ${missingEnv.join(', ')}`);
+      Logger.info('💡 Créez un fichier .env avec les variables requises');
       process.exit(1);
     }
 
