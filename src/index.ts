@@ -139,7 +139,7 @@ class MinecraftTransferBot {
           type: ActivityType.Custom 
         });
       }
-    }, 5000); // Mise à jour toutes les 5 secondes
+    }, 1000); // ✅ Mise à jour toutes les 1 seconde
   }
 
   private stopStatusUpdates(): void {
@@ -176,17 +176,17 @@ class MinecraftTransferBot {
         .setTitle('🚀 Minecraft Transfer Bot - Démarré !')
         .setDescription('```yaml\n' +
           '# ========================================\n' +
-          '# MINECRAFT MAP TRANSFER SYSTEM\n' +
+          '# MINECRAFT MAP TRANSFER SYSTEM v2.0\n' +
           '# ========================================\n' +
           '\n' +
           'status: ONLINE ✅\n' +
-          'version: v1.0.0\n' +
+          'version: v2.0.0\n' +
           'uptime: Just started\n' +
           '\n' +
           'services:\n' +
           '  - discord_bot: READY\n' +
-          '  - pterodactyl_api: STANDBY\n' +
-          '  - sftp_transfer: STANDBY\n' +
+          '  - pterodactyl_api: ENHANCED\n' +
+          '  - sftp_transfer: OPTIMIZED\n' +
           '\n' +
           'servers:\n' +
           '  source: BUILD_SERVER\n' +
@@ -195,17 +195,24 @@ class MinecraftTransferBot {
           'features:\n' +
           '  - automatic_transfer: ENABLED\n' +
           '  - playerdata_backup: ENABLED\n' +
-          '  - progress_tracking: ENABLED\n' +
-          '  - rollback_protection: ENABLED\n' +
-          '  - status_updates: ENABLED (5s)\n' +
+          '  - progress_tracking: REAL_TIME\n' +
+          '  - rollback_protection: ENHANCED\n' +
+          '  - status_updates: 1 SECOND\n' +
+          '  - extended_timeouts: 10 MINUTES\n' +
+          '\n' +
+          'optimizations:\n' +
+          '  - compression_timeout: 600s\n' +
+          '  - extraction_timeout: 600s\n' +
+          '  - embed_refresh: 1s\n' +
+          '  - status_refresh: 1s\n' +
           '\n' +
           'ready_for_transfer: true\n' +
-          'access_level: PUBLIC (tous les utilisateurs)\n' +
+          'access_level: PUBLIC\n' +
           '```')
         .setColor(0x00ff00)
         .setTimestamp()
         .setFooter({ 
-          text: '🎮 Prêt pour les transferts de maps Minecraft - Accès libre',
+          text: '🎮 Transferts optimisés - Timeouts étendus - Mise à jour 1s',
           iconURL: this.client.user?.displayAvatarURL()
         })
         .addFields(
@@ -220,12 +227,13 @@ class MinecraftTransferBot {
             inline: true
           },
           {
-            name: '🔧 Actions disponibles',
-            value: '• Cliquez sur le bouton ci-dessous pour démarrer un transfert\n' +
-                   '• Utilisez `/build transfer destination:staging`\n' +
-                   '• Surveillez les logs en temps réel\n' +
-                   '• ✨ **Tous les utilisateurs peuvent lancer un transfert**\n' +
-                   '• 📱 **Statut Discord mis à jour toutes les 5s**',
+            name: '🔧 Améliorations v2.0',
+            value: '• **Timeouts étendus** (10min compression/extraction)\n' +
+                   '• **Mise à jour temps réel** (1 seconde)\n' +
+                   '• **Rollback renforcé** (nettoyage complet)\n' +
+                   '• **Logs détaillés** avec durées\n' +
+                   '• **Gestion d\'erreurs** améliorée\n' +
+                   '• **Performance optimisée**',
             inline: true
           }
         );
@@ -233,7 +241,7 @@ class MinecraftTransferBot {
       // Créer le bouton de transfert
       const transferButton = new ButtonBuilder()
         .setCustomId('start_transfer')
-        .setLabel('🚀 Démarrer le Transfert')
+        .setLabel('🚀 Démarrer le Transfert v2.0')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('🏗️');
 
@@ -246,7 +254,7 @@ class MinecraftTransferBot {
         components: [row]
       });
 
-      Logger.success(`✅ Embed de démarrage envoyé dans le canal ${channelId}`);
+      Logger.success(`✅ Embed de démarrage v2.0 envoyé dans le canal ${channelId}`);
 
     } catch (error: any) {
       Logger.error('Erreur lors de l\'envoi de l\'embed de démarrage', error);
@@ -287,8 +295,8 @@ class MinecraftTransferBot {
 
   private async handleTransferButton(interaction: ButtonInteraction): Promise<void> {
     try {
-      // Log de l'utilisateur qui démarre le transfert (sans vérification de permissions)
-      Logger.info(`🚀 Transfert demandé par ${interaction.user.tag} (${interaction.user.id})`);
+      // Log de l'utilisateur qui démarre le transfert
+      Logger.info(`🚀 Transfert v2.0 demandé par ${interaction.user.tag} (${interaction.user.id})`);
 
       // Vérifier les variables d'environnement
       const requiredEnvVars = [
@@ -337,7 +345,7 @@ class MinecraftTransferBot {
       // Désactiver le bouton pendant le transfert
       const disabledButton = new ButtonBuilder()
         .setCustomId('start_transfer')
-        .setLabel('🔄 Transfert en cours...')
+        .setLabel('🔄 Transfert v2.0 en cours...')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('⏳')
         .setDisabled(true);
@@ -364,26 +372,33 @@ class MinecraftTransferBot {
       this.startStatusUpdates();
 
       try {
-        // Démarrer le transfert avec mise à jour en temps réel
+        // Démarrer le transfert avec mise à jour en temps réel toutes les 1 seconde
+        let lastUpdateTime = 0;
+        
         await transferService.executeTransfer((tracker) => {
-          const embed = EmbedGenerator.createTransferEmbed(tracker);
-          interaction.editReply({ 
-            embeds: [embed],
-            components: [disabledRow]
-          }).catch(error => {
-            Logger.warning('Impossible de mettre à jour l\'embed', error);
-          });
+          const now = Date.now();
+          // Mettre à jour l'embed toutes les 1 seconde maximum
+          if (now - lastUpdateTime >= 1000) {
+            const embed = EmbedGenerator.createTransferEmbed(tracker);
+            interaction.editReply({ 
+              embeds: [embed],
+              components: [disabledRow]
+            }).catch(error => {
+              Logger.warning('Impossible de mettre à jour l\'embed', error);
+            });
+            lastUpdateTime = now;
+          }
         });
 
         // Message final de succès avec bouton réactivé
         const successEmbed = EmbedGenerator.createSuccessEmbed(
-          'Transfert terminé !',
-          'La map a été transférée avec succès du serveur Build vers Staging !'
+          'Transfert v2.0 terminé !',
+          'La map a été transférée avec succès du serveur Build vers Staging avec les nouveaux timeouts étendus !'
         );
 
         const enabledButton = new ButtonBuilder()
           .setCustomId('start_transfer')
-          .setLabel('🚀 Démarrer un nouveau Transfert')
+          .setLabel('🚀 Nouveau Transfert v2.0')
           .setStyle(ButtonStyle.Primary)
           .setEmoji('🏗️');
 
@@ -395,7 +410,7 @@ class MinecraftTransferBot {
           components: [enabledRow]
         });
 
-        Logger.success(`✅ Transfert terminé avec succès par ${interaction.user.tag} (via bouton)`);
+        Logger.success(`✅ Transfert v2.0 terminé avec succès par ${interaction.user.tag} (via bouton)`);
 
       } finally {
         // Arrêter les mises à jour du statut
@@ -403,20 +418,20 @@ class MinecraftTransferBot {
       }
 
     } catch (error: any) {
-      Logger.error('❌ Erreur lors du transfert via bouton', error);
+      Logger.error('❌ Erreur lors du transfert v2.0 via bouton', error);
 
       // Arrêter les mises à jour du statut en cas d'erreur
       this.stopStatusUpdates();
 
       const errorEmbed = EmbedGenerator.createErrorEmbed(
-        'Erreur lors du transfert',
+        'Erreur lors du transfert v2.0',
         `Erreur: ${error.message}`
       );
 
       // Réactiver le bouton en cas d'erreur
       const enabledButton = new ButtonBuilder()
         .setCustomId('start_transfer')
-        .setLabel('🚀 Réessayer le Transfert')
+        .setLabel('🚀 Réessayer Transfert v2.0')
         .setStyle(ButtonStyle.Danger)
         .setEmoji('🔄');
 
@@ -445,32 +460,33 @@ class MinecraftTransferBot {
     }
 
     try {
-      // Connecter le bot (les commandes doivent être déployées séparément)
+      // Connecter le bot
       await this.client.login(token);
       
-      Logger.success('🚀 Bot démarré avec succès !');
+      Logger.success('🚀 Bot v2.0 démarré avec succès !');
       Logger.info('💡 Pour déployer les commandes, utilisez: npm run deploy');
       Logger.info('🔓 Mode accès libre activé - tous les utilisateurs peuvent lancer des transferts');
-      Logger.info('📱 Statut Discord mis à jour toutes les 5 secondes pendant les transferts');
+      Logger.info('📱 Statut Discord mis à jour toutes les 1 seconde pendant les transferts');
+      Logger.info('⏱️ Timeouts étendus: 10 minutes pour compression/extraction');
       
     } catch (error) {
-      Logger.error('Erreur lors du démarrage du bot', error);
+      Logger.error('Erreur lors du démarrage du bot v2.0', error);
       throw error;
     }
   }
 
   async shutdown(): Promise<void> {
     try {
-      Logger.info('Fermeture du bot...');
+      Logger.info('Fermeture du bot v2.0...');
       
       // Arrêter les mises à jour du statut
       this.stopStatusUpdates();
       
       this.client.destroy();
-      Logger.success('Bot fermé proprement');
+      Logger.success('Bot v2.0 fermé proprement');
       process.exit(0);
     } catch (error) {
-      Logger.error('Erreur lors de la fermeture', error);
+      Logger.error('Erreur lors de la fermeture v2.0', error);
       process.exit(1);
     }
   }
@@ -490,35 +506,37 @@ class MinecraftTransferBot {
 // Fonction principale
 async function main(): Promise<void> {
   try {
-    // Vérifier les variables d'environnement critiques
-    const requiredEnv = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID'];
-    const missingEnv = requiredEnv.filter(env => !process.env[env]);
-    
-    if (missingEnv.length > 0) {
-      Logger.error(`Variables d'environnement manquantes: ${missingEnv.join(', ')}`);
-      Logger.info('💡 Créez un fichier .env avec les variables requises');
-      process.exit(1);
-    }
+// Vérifier les variables d'environnement critiques
+   const requiredEnv = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID'];
+   const missingEnv = requiredEnv.filter(env => !process.env[env]);
+   
+   if (missingEnv.length > 0) {
+     Logger.error(`Variables d'environnement manquantes: ${missingEnv.join(', ')}`);
+     Logger.info('💡 Créez un fichier .env avec les variables requises');
+     process.exit(1);
+   }
 
-    Logger.info('🚀 Démarrage du Minecraft Transfer Bot...');
-    Logger.info(`📍 Environnement: ${process.env.NODE_ENV || 'development'}`);
-    Logger.info(`🐧 Plateforme: ${process.platform}`);
-    Logger.info(`🟢 Node.js: ${process.version}`);
-    Logger.info('🔓 Mode: Accès libre (tous les utilisateurs autorisés)');
-    Logger.info('📱 Statut: Mise à jour automatique du statut Discord activée');
+   Logger.info('🚀 Démarrage du Minecraft Transfer Bot v2.0...');
+   Logger.info(`📍 Environnement: ${process.env.NODE_ENV || 'development'}`);
+   Logger.info(`🐧 Plateforme: ${process.platform}`);
+   Logger.info(`🟢 Node.js: ${process.version}`);
+   Logger.info('🔓 Mode: Accès libre (tous les utilisateurs autorisés)');
+   Logger.info('📱 Statut: Mise à jour automatique du statut Discord (1s)');
+   Logger.info('⏱️ Timeouts: Compression/Extraction étendus à 10 minutes');
+   Logger.info('🔄 Embeds: Rafraîchissement toutes les 1 seconde');
 
-    const bot = new MinecraftTransferBot();
-    await bot.start();
+   const bot = new MinecraftTransferBot();
+   await bot.start();
 
-  } catch (error) {
-    Logger.error('Erreur fatale lors du démarrage', error);
-    process.exit(1);
-  }
+ } catch (error) {
+   Logger.error('Erreur fatale lors du démarrage v2.0', error);
+   process.exit(1);
+ }
 }
 
 // Démarrer le bot si ce fichier est exécuté directement
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
+ main();
 }
 
 export { MinecraftTransferBot };

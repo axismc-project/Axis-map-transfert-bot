@@ -44,21 +44,19 @@ export class TransferService {
     let srv2Connected = false;
 
     try {
-      Logger.info('🚀 Début du transfert de map Build → Staging');
+      Logger.info('🚀 Début du transfert de map Build → Staging v2.0');
 
       // Étape 1: Notification des serveurs (10%)
       await this.executeStep(0, 'Notification des serveurs', async () => {
         this.tracker.updateStep(0, 'running', 'Envoi des notifications...', 0);
         progressCallback?.(this.tracker);
 
-        await Promise.all([
-          this.srv1Ptero.sendTransferNotification(10),
-          this.srv2Ptero.sendTransferNotification(10)
-        ]);
+        // Notifications supprimées - pas de webhook/tellraw
+        Logger.info('📢 Notifications supprimées pour optimiser les performances');
 
-        // Attendre 10 secondes comme annoncé
-        for (let i = 10; i > 0; i--) {
-          this.tracker.updateStep(0, 'running', `Démarrage dans ${i}s...`, ((10 - i) / 10) * 100);
+        // Attendre 3 secondes au lieu de 10
+        for (let i = 3; i > 0; i--) {
+          this.tracker.updateStep(0, 'running', `Démarrage dans ${i}s...`, ((3 - i) / 3) * 100);
           progressCallback?.(this.tracker);
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
@@ -74,11 +72,11 @@ export class TransferService {
         progressCallback?.(this.tracker);
         await this.srv2Ptero.setPowerState('stop');
 
-        this.tracker.updateStep(1, 'running', 'Attente arrêt complet (30s)...', 75);
+        this.tracker.updateStep(1, 'running', 'Attente arrêt complet (45s)...', 75);
         progressCallback?.(this.tracker);
         await Promise.all([
-          this.srv1Ptero.waitForServerState('offline', 30000),
-          this.srv2Ptero.waitForServerState('offline', 30000)
+          this.srv1Ptero.waitForServerState('offline', 45000),
+          this.srv2Ptero.waitForServerState('offline', 45000)
         ]);
       });
 
@@ -96,7 +94,7 @@ export class TransferService {
 
       // Étape 3: Compression de la map srv1 (30%)
       await this.executeStep(2, 'Compression /world srv1', async () => {
-        this.tracker.updateStep(2, 'running', 'Compression en cours...', 50);
+        this.tracker.updateStep(2, 'running', 'Compression en cours (timeout: 10min)...', 50);
         progressCallback?.(this.tracker);
         this.archiveName = await this.srv1Ptero.compressFolder('world');
         Logger.info(`📦 Archive créée: ${this.archiveName}`);
@@ -155,7 +153,7 @@ export class TransferService {
 
       // Étape 7: Décompression nouvelle map (70%)
       await this.executeStep(6, 'Décompression nouvelle map', async () => {
-        this.tracker.updateStep(6, 'running', 'Extraction en cours...', 50);
+        this.tracker.updateStep(6, 'running', 'Extraction en cours (timeout: 10min)...', 50);
         progressCallback?.(this.tracker);
         await this.srv2Ptero.extractArchive(this.archiveName, '/');
         Logger.success('✅ Nouvelle map extraite');
@@ -223,19 +221,19 @@ export class TransferService {
         await this.srv2Ptero.setPowerState('start');
         Logger.success('✅ Serveur Staging redémarré');
 
-        this.tracker.updateStep(9, 'running', 'Attente démarrage complet (30s)...', 75);
+        this.tracker.updateStep(9, 'running', 'Attente démarrage complet (45s)...', 75);
         progressCallback?.(this.tracker);
         await Promise.all([
-          this.srv1Ptero.waitForServerState('running', 30000),
-          this.srv2Ptero.waitForServerState('running', 30000)
+          this.srv1Ptero.waitForServerState('running', 45000),
+          this.srv2Ptero.waitForServerState('running', 45000)
         ]);
         Logger.success('✅ Serveurs démarrés');
       });
 
-      Logger.success('🎉 Transfert de map terminé avec succès !');
+      Logger.success('🎉 Transfert de map v2.0 terminé avec succès !');
 
     } catch (error: any) {
-      Logger.error('❌ Erreur lors du transfert', error);
+      Logger.error('❌ Erreur lors du transfert v2.0', error);
 
       // Marquer l'étape actuelle comme erreur
       const currentStep = this.tracker.getCurrentStep();
@@ -262,10 +260,12 @@ export class TransferService {
       Logger.info(`🔄 Étape ${stepIndex + 1}/10: ${stepName}`);
       this.tracker.updateStep(stepIndex, 'running', 'En cours...', 0);
 
+      const startTime = Date.now();
       await operation();
+      const duration = Date.now() - startTime;
 
-      this.tracker.updateStep(stepIndex, 'completed', 'Terminé', 100);
-      Logger.success(`✅ Étape ${stepIndex + 1}/10 terminée: ${stepName}`);
+      this.tracker.updateStep(stepIndex, 'completed', `Terminé (${Math.round(duration/1000)}s)`, 100);
+      Logger.success(`✅ Étape ${stepIndex + 1}/10 terminée en ${Math.round(duration/1000)}s: ${stepName}`);
     } catch (error) {
       this.tracker.updateStep(stepIndex, 'error', `Erreur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`, 0);
       throw error;
@@ -370,7 +370,7 @@ export class TransferService {
 
   private async handleRollback(): Promise<void> {
     try {
-      Logger.warning('🔄 Début du rollback complet...');
+      Logger.warning('🔄 Début du rollback complet v2.0...');
 
       // 1. Nettoyer le cache temporaire
       try {
@@ -441,16 +441,16 @@ export class TransferService {
         Logger.warning('⚠️ Erreur lors du nettoyage des fichiers temporaires système', tempCleanupError);
       }
 
-      Logger.success('✅ Rollback complet terminé');
+      Logger.success('✅ Rollback complet v2.0 terminé');
 
     } catch (error) {
-      Logger.error('❌ Erreur critique lors du rollback', error);
+      Logger.error('❌ Erreur critique lors du rollback v2.0', error);
     }
   }
 
   private async cleanup(srv1Connected: boolean, srv2Connected: boolean): Promise<void> {
     try {
-      Logger.info('🔄 Nettoyage des connexions...');
+      Logger.info('🔄 Nettoyage des connexions v2.0...');
       
       if (srv1Connected) {
         try {
@@ -470,9 +470,9 @@ export class TransferService {
         }
       }
       
-      Logger.success('✅ Nettoyage terminé');
+      Logger.success('✅ Nettoyage v2.0 terminé');
     } catch (error) {
-      Logger.error('❌ Erreur lors du nettoyage', error);
+      Logger.error('❌ Erreur lors du nettoyage v2.0', error);
     }
   }
 
