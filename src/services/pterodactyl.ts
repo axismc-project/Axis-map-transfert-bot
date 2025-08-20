@@ -85,15 +85,17 @@ export class PterodactylService {
     try {
       Logger.info(`📦 Compression du dossier: ${folderPath}`);
       
-      await this.client.post(`/servers/${this.config.serverId}/files/compress`, {
+      const response = await this.client.post<PterodactylResponse<FileObject>>(`/servers/${this.config.serverId}/files/compress`, {
         root: '/',
         files: [folderPath]
       });
 
-      // Nom de l'archive générée
-      const archiveName = `${folderPath.replace(/[/\\]/g, '_')}.tar.gz`;
+      // Récupérer le vrai nom du fichier depuis la réponse de l'API
+      const archiveName = response.data.attributes.name;
       
       Logger.success(`✅ Compression terminée: ${archiveName}`);
+      Logger.info(`📊 Taille de l'archive: ${Math.round(response.data.attributes.size / 1024 / 1024)} MB`);
+      
       return archiveName;
     } catch (error: any) {
       Logger.error(`❌ Erreur lors de la compression`, error.response?.data || error.message);
