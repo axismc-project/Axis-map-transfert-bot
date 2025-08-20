@@ -1,0 +1,47 @@
+{
+  "name": "minecraft-transfer-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord pour transférer des maps Minecraft entre serveurs Pterodactyl",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "deploy": "node dist/deploy.js",
+    "deploy:clear": "node dist/deploy.js clear",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write src/**/*.ts",
+    "clean": "rm -rf dist",
+    "prestart": "npm run build",
+    "railway:build": "npm run build",
+    "railway:start": "npm run start"
+  },
+  "keywords": ["discord", "bot", "minecraft", "pterodactyl", "transfer"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.2",
+    "ssh2-sftp-client": "^10.0.3",
+    "archiver": "^6.0.1",
+    "extract-zip": "^2.0.1",
+    "fs-extra": "^11.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@types/archiver": "^6.0.2",
+    "@types/fs-extra": "^11.0.4",
+    "@types/ssh2-sftp-client": "^2.0.2",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
