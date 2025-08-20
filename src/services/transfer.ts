@@ -91,13 +91,27 @@ export class TransferService {
       });
 
       // Étape 5: Transfert SFTP srv1 → srv2
+      // Dans la méthode executeTransfer, remplacez l'étape 5 par :
+
+      // Remplacez l'étape 5 dans la méthode executeTransfer par :
+
+      // Étape 5: Transfert SFTP srv1 → srv2
       await this.executeStep(4, 'Transfert SFTP srv1 → srv2', async () => {
         await this.srv2Sftp.transferFileDirect(
           this.srv1Sftp,
           archiveName,
           archiveName,
-          (progress) => {
-            this.tracker.updateStep(4, 'running', `Transfert en cours... ${progress}%`, progress);
+          ({ phase, data }) => {
+            const phaseText = phase === 'download' ? 'Téléchargement' : 'Upload';
+            const speedText = data.speed > 0 ? ` - ${(data.speed / (1024 * 1024)).toFixed(2)} MB/s` : '';
+            const etaText = data.eta !== Infinity ? ` - ETA: ${Math.ceil(data.eta)}s` : '';
+
+            this.tracker.updateStep(
+              4,
+              'running',
+              `${phaseText}: ${data.percentage}%${speedText}${etaText}`,
+              data.percentage
+            );
             progressCallback?.(this.tracker);
           }
         );
@@ -169,9 +183,9 @@ export class TransferService {
       });
 
       Logger.success('🎉 Transfert de map terminé avec succès !');
-      } catch (error: any) {
+    } catch (error: any) {
       Logger.error('❌ Erreur lors du transfert', error);
-      
+
       // Marquer l'étape actuelle comme erreur
       const currentStep = this.tracker.getCurrentStep();
       if (currentStep >= 0) {
@@ -193,9 +207,9 @@ export class TransferService {
     try {
       Logger.info(`🔄 Étape ${stepIndex + 1}: ${stepName}`);
       this.tracker.updateStep(stepIndex, 'running', 'En cours...', 0);
-      
+
       await operation();
-      
+
       this.tracker.updateStep(stepIndex, 'completed', 'Terminé', 100);
       Logger.success(`✅ Étape ${stepIndex + 1} terminée: ${stepName}`);
     } catch (error) {
@@ -208,26 +222,26 @@ export class TransferService {
     try {
       this.tracker.updateStep(3, 'running', 'Vérification playerdata...', 25);
       progressCallback?.(this.tracker);
-      
+
       // Vérifier si le dossier playerdata existe
       const playerdataExists = await this.srv2Sftp.fileExists('world/playerdata');
-      
+
       if (playerdataExists) {
         this.tracker.updateStep(3, 'running', 'Sauvegarde playerdata...', 50);
         progressCallback?.(this.tracker);
-        
+
         // Créer le dossier de cache temporaire
         await fs.ensureDir(this.tempCachePath);
-        
+
         // Télécharger le dossier playerdata
         await this.srv2Sftp.downloadFolder(
           'world/playerdata',
           path.join(this.tempCachePath, 'playerdata')
         );
-        
+
         this.tracker.updateStep(3, 'running', 'Sauvegarde terminée', 100);
         progressCallback?.(this.tracker);
-        
+
         Logger.success('PlayerData sauvegardé dans le cache temporaire');
       } else {
         Logger.warning('Aucun dossier playerdata trouvé sur srv2, création d\'un dossier vide');
@@ -243,7 +257,7 @@ export class TransferService {
     try {
       this.tracker.updateStep(8, 'running', 'Suppression playerdata srv1...', 25);
       progressCallback?.(this.tracker);
-      
+
       // Supprimer le playerdata de la map srv1 (nouvelle map)
       try {
         await this.srv2Ptero.deleteFolder('world/playerdata');
@@ -254,21 +268,21 @@ export class TransferService {
 
       this.tracker.updateStep(8, 'running', 'Restauration playerdata srv2...', 50);
       progressCallback?.(this.tracker);
-      
+
       // Vérifier si nous avons une sauvegarde
       const backupPath = path.join(this.tempCachePath, 'playerdata');
       const backupExists = await fs.pathExists(backupPath);
-      
+
       if (backupExists) {
         // Restaurer le playerdata sauvegardé
         await this.srv2Sftp.uploadFolder(
           backupPath,
           'world/playerdata'
         );
-        
+
         this.tracker.updateStep(8, 'running', 'Restauration terminée', 100);
         progressCallback?.(this.tracker);
-        
+
         Logger.success('PlayerData de srv2 restauré');
       } else {
         Logger.warning('Aucune sauvegarde playerdata trouvée');
@@ -281,7 +295,7 @@ export class TransferService {
       } catch (cleanupError) {
         Logger.warning('Impossible de nettoyer le cache temporaire', cleanupError);
       }
-      
+
     } catch (error: any) {
       Logger.error('Erreur lors de la restauration playerdata', error);
       throw new Error(`Impossible de restaurer playerdata: ${error.message}`);
@@ -291,7 +305,7 @@ export class TransferService {
   private async handleRollback(): Promise<void> {
     try {
       Logger.warning('🔄 Tentative de rollback...');
-      
+
       // Redémarrer les serveurs s'ils sont arrêtés
       try {
         await Promise.all([

@@ -4,6 +4,14 @@ import { Logger } from '../utils/logger.js';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 
+interface TransferProgress {
+  bytesTransferred: number;
+  totalBytes: number;
+  percentage: number;
+  speed: number; // MB/s
+  eta: number; // secondes restantes
+}
+
 export class SftpService {
   private client: SftpClient;
   private config: ServerConfig;
@@ -41,53 +49,159 @@ export class SftpService {
     }
   }
 
-  async downloadFile(remotePath: string, localPath: string, onProgress?: (progress: number) => void): Promise<void> {
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  private formatSpeed(bytesPerSecond: number): string {
+    const mbps = bytesPerSecond / (1024 * 1024);
+    return `${mbps.toFixed(2)} MB/s`;
+  }
+
+  private formatTime(seconds: number): string {
+    if (seconds === Infinity || isNaN(seconds)) return '∞';
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
+  async downloadFileWithProgress(
+    remotePath: string, 
+    localPath: string, 
+    onProgress?: (progress: TransferProgress) => void
+  ): Promise<void> {
     try {
       const fullRemotePath = `${this.config.sftpRoot}/${remotePath}`;
       Logger.info(`📥 Téléchargement: ${fullRemotePath} → ${localPath}`);
       
+      // Obtenir la taille du fichier
+      const stat = await this.client.stat(fullRemotePath);
+      const totalBytes = stat.size;
+      Logger.info(`📊 Taille du fichier: ${this.formatBytes(totalBytes)}`);
+      
       // Créer le dossier local si nécessaire
       await fs.ensureDir(path.dirname(localPath));
       
-      // Téléchargement simple
-      await this.client.fastGet(fullRemotePath, localPath);
+      let lastTime = Date.now();
+      let lastBytes = 0;
+      const startTime = Date.now();
       
-      if (onProgress) {
-        onProgress(100);
-      }
+      // Configuration du transfert avec callback de progression
+      await this.client.fastGet(fullRemotePath, localPath, {
+        step: (totalTransferred: number, _chunk: number, total: number) => {
+          const now = Date.now();
+          const timeDiff = (now - lastTime) / 1000; // secondes
+          const bytesDiff = totalTransferred - lastBytes;
+          
+          if (timeDiff >= 0.5) { // Mise à jour toutes les 500ms
+            const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0;
+            const percentage = Math.round((totalTransferred / total) * 100);
+            const eta = speed > 0 ? (total - totalTransferred) / speed : Infinity;
+            
+            const progress: TransferProgress = {
+              bytesTransferred: totalTransferred,
+              totalBytes: total,
+              percentage: percentage,
+              speed: speed,
+              eta: eta
+            };
+            
+            Logger.info(`📥 ${percentage}% - ${this.formatBytes(totalTransferred)}/${this.formatBytes(total)} - ${this.formatSpeed(speed)} - ETA: ${this.formatTime(eta)}`);
+            
+            if (onProgress) {
+              onProgress(progress);
+            }
+            
+            lastTime = now;
+            lastBytes = totalTransferred;
+          }
+        }
+      });
 
-      Logger.success(`✅ Téléchargement terminé: ${localPath}`);
+      const totalTime = (Date.now() - startTime) / 1000;
+      const avgSpeed = totalBytes / totalTime;
+      Logger.success(`✅ Téléchargement terminé en ${this.formatTime(totalTime)} (moy: ${this.formatSpeed(avgSpeed)})`);
+      
     } catch (error: any) {
       Logger.error(`❌ Erreur lors du téléchargement`, error.message);
       throw new Error(`Impossible de télécharger ${remotePath}: ${error.message}`);
     }
   }
 
-  async uploadFile(localPath: string, remotePath: string, onProgress?: (progress: number) => void): Promise<void> {
+  async uploadFileWithProgress(
+    localPath: string, 
+    remotePath: string, 
+    onProgress?: (progress: TransferProgress) => void
+  ): Promise<void> {
     try {
       const fullRemotePath = `${this.config.sftpRoot}/${remotePath}`;
       Logger.info(`📤 Upload: ${localPath} → ${fullRemotePath}`);
       
-      // Vérifier que le fichier local existe
+      // Vérifier que le fichier local existe et obtenir sa taille
       if (!await fs.pathExists(localPath)) {
         throw new Error(`Fichier local introuvable: ${localPath}`);
       }
-
-      // Upload simple
-      await this.client.fastPut(localPath, fullRemotePath);
       
-      if (onProgress) {
-        onProgress(100);
-      }
+      const stat = await fs.stat(localPath);
+      const totalBytes = stat.size;
+      Logger.info(`📊 Taille du fichier: ${this.formatBytes(totalBytes)}`);
+      
+      let lastTime = Date.now();
+      let lastBytes = 0;
+      const startTime = Date.now();
+      
+      // Configuration du transfert avec callback de progression
+      await this.client.fastPut(localPath, fullRemotePath, {
+        step: (totalTransferred: number, _chunk: number, total: number) => {
+          const now = Date.now();
+          const timeDiff = (now - lastTime) / 1000; // secondes
+          const bytesDiff = totalTransferred - lastBytes;
+          
+          if (timeDiff >= 0.5) { // Mise à jour toutes les 500ms
+            const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0;
+            const percentage = Math.round((totalTransferred / total) * 100);
+            const eta = speed > 0 ? (total - totalTransferred) / speed : Infinity;
+            
+            const progress: TransferProgress = {
+              bytesTransferred: totalTransferred,
+              totalBytes: total,
+              percentage: percentage,
+              speed: speed,
+              eta: eta
+            };
+            
+            Logger.info(`📤 ${percentage}% - ${this.formatBytes(totalTransferred)}/${this.formatBytes(total)} - ${this.formatSpeed(speed)} - ETA: ${this.formatTime(eta)}`);
+            
+            if (onProgress) {
+              onProgress(progress);
+            }
+            
+            lastTime = now;
+            lastBytes = totalTransferred;
+          }
+        }
+      });
 
-      Logger.success(`✅ Upload terminé: ${fullRemotePath}`);
+      const totalTime = (Date.now() - startTime) / 1000;
+      const avgSpeed = totalBytes / totalTime;
+      Logger.success(`✅ Upload terminé en ${this.formatTime(totalTime)} (moy: ${this.formatSpeed(avgSpeed)})`);
+      
     } catch (error: any) {
       Logger.error(`❌ Erreur lors de l'upload`, error.message);
       throw new Error(`Impossible d'uploader ${localPath}: ${error.message}`);
     }
   }
 
-  async transferFileDirect(sourceService: SftpService, remotePath: string, destinationPath: string, onProgress?: (progress: number) => void): Promise<void> {
+  async transferFileDirect(
+    sourceService: SftpService, 
+    remotePath: string, 
+    destinationPath: string, 
+    onProgress?: (progress: { phase: 'download' | 'upload', data: TransferProgress }) => void
+  ): Promise<void> {
     try {
       const sourceFullPath = `${sourceService.config.sftpRoot}/${remotePath}`;
       const destFullPath = `${this.config.sftpRoot}/${destinationPath}`;
@@ -95,12 +209,9 @@ export class SftpService {
       Logger.info(`🔄 Transfert direct: ${sourceFullPath} → ${destFullPath}`);
       
       // Vérifier que le fichier source existe
-      try {
-        const stat = await sourceService.client.stat(sourceFullPath);
-        Logger.info(`📊 Taille du fichier: ${Math.round(stat.size / 1024 / 1024)} MB`);
-      } catch (statError) {
-        throw new Error(`Fichier source introuvable: ${sourceFullPath}`);
-      }
+      const stat = await sourceService.client.stat(sourceFullPath);
+      const fileSize = stat.size;
+      Logger.info(`📊 Taille du fichier: ${this.formatBytes(fileSize)}`);
       
       // Créer un fichier temporaire local pour le transfert
       const tempDir = process.env.TEMP_CACHE_PATH || '/tmp';
@@ -108,17 +219,23 @@ export class SftpService {
       const tempFile = path.join(tempDir, `transfer_${Date.now()}_${path.basename(remotePath)}`);
       
       try {
-        // Télécharger depuis la source
-        if (onProgress) onProgress(10);
-        await sourceService.client.fastGet(sourceFullPath, tempFile);
-
-        if (onProgress) onProgress(50);
+        // Phase 1: Téléchargement depuis la source
+        Logger.info(`📥 Phase 1/2: Téléchargement depuis le serveur source`);
+        await sourceService.downloadFileWithProgress(remotePath, tempFile, (progress) => {
+          if (onProgress) {
+            onProgress({ phase: 'download', data: progress });
+          }
+        });
         
-        // Uploader vers la destination
-        await this.client.fastPut(tempFile, destFullPath);
+        // Phase 2: Upload vers la destination
+        Logger.info(`📤 Phase 2/2: Upload vers le serveur destination`);
+        await this.uploadFileWithProgress(tempFile, destinationPath, (progress) => {
+          if (onProgress) {
+            onProgress({ phase: 'upload', data: progress });
+          }
+        });
 
-        if (onProgress) onProgress(100);
-        Logger.success(`✅ Transfert direct terminé`);
+        Logger.success(`✅ Transfert direct terminé avec succès`);
       } finally {
         // Nettoyer le fichier temporaire
         try {
@@ -132,6 +249,23 @@ export class SftpService {
       Logger.error(`❌ Erreur lors du transfert direct`, error.message);
       throw new Error(`Transfert direct échoué: ${error.message}`);
     }
+  }
+
+  // Méthodes de compatibilité (utilisent les versions avec progress en interne)
+  async downloadFile(remotePath: string, localPath: string, onProgress?: (progress: number) => void): Promise<void> {
+    await this.downloadFileWithProgress(remotePath, localPath, (progress) => {
+      if (onProgress) {
+        onProgress(progress.percentage);
+      }
+    });
+  }
+
+  async uploadFile(localPath: string, remotePath: string, onProgress?: (progress: number) => void): Promise<void> {
+    await this.uploadFileWithProgress(localPath, remotePath, (progress) => {
+      if (onProgress) {
+        onProgress(progress.percentage);
+      }
+    });
   }
 
   async downloadFolder(remotePath: string, localPath: string): Promise<void> {
