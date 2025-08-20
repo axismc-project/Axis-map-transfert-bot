@@ -1,7 +1,7 @@
 import SftpClient from 'ssh2-sftp-client';
 import { ServerConfig } from '../types/index.js';
 import { Logger } from '../utils/logger.js';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra'; // ✅ Import corrigé
 import * as path from 'path';
 
 interface TransferProgress {

@@ -27,9 +27,18 @@ interface Command {
   execute: (interaction: CommandInteraction) => Promise<void>;
 }
 
+interface TransferStatusUpdate {
+  phase: 'download' | 'upload';
+  percentage: number;
+  speed: number;
+  eta: number;
+}
+
 class MinecraftTransferBot {
   private client: Client;
   private commands: Collection<string, Command>;
+  private statusUpdateInterval?: NodeJS.Timeout;
+  private currentTransferStatus?: TransferStatusUpdate;
 
   constructor() {
     this.client = new Client({
@@ -58,7 +67,7 @@ class MinecraftTransferBot {
       Logger.success(`🤖 Bot connecté en tant que ${this.client.user.tag}`);
       Logger.info(`📊 Présent sur ${this.client.guilds.cache.size} serveur(s)`);
       
-      // Définir l'activité du bot
+      // Définir l'activité initiale du bot
       this.client.user.setActivity('Transferts Minecraft', { 
         type: ActivityType.Watching 
       });
@@ -114,6 +123,44 @@ class MinecraftTransferBot {
     });
   }
 
+  private startStatusUpdates(): void {
+    this.statusUpdateInterval = setInterval(() => {
+      if (this.currentTransferStatus && this.client.user) {
+        const { phase, percentage, speed, eta } = this.currentTransferStatus;
+        const phaseIcon = phase === 'download' ? '📥' : '📤';
+        const speedText = speed > 0 ? `${speed.toFixed(1)}MB/s` : '';
+        const etaText = eta !== Infinity && !isNaN(eta) ? `ETA:${Math.ceil(eta)}s` : '';
+        
+        let statusText = `${phaseIcon} ${percentage}%`;
+        if (speedText) statusText += ` ${speedText}`;
+        if (etaText) statusText += ` ${etaText}`;
+
+        this.client.user.setActivity(statusText, { 
+          type: ActivityType.Custom 
+        });
+      }
+    }, 5000); // Mise à jour toutes les 5 secondes
+  }
+
+  private stopStatusUpdates(): void {
+    if (this.statusUpdateInterval) {
+      clearInterval(this.statusUpdateInterval);
+      this.statusUpdateInterval = undefined;
+    }
+    this.currentTransferStatus = undefined;
+    
+    // Remettre le statut par défaut
+    if (this.client.user) {
+      this.client.user.setActivity('Transferts Minecraft', { 
+        type: ActivityType.Watching 
+      });
+    }
+  }
+
+  private updateTransferStatus(status: TransferStatusUpdate): void {
+    this.currentTransferStatus = status;
+  }
+
   private async sendStartupEmbed(): Promise<void> {
     try {
       const channelId = '1406532712285732944';
@@ -150,6 +197,7 @@ class MinecraftTransferBot {
           '  - playerdata_backup: ENABLED\n' +
           '  - progress_tracking: ENABLED\n' +
           '  - rollback_protection: ENABLED\n' +
+          '  - status_updates: ENABLED (5s)\n' +
           '\n' +
           'ready_for_transfer: true\n' +
           'access_level: PUBLIC (tous les utilisateurs)\n' +
@@ -176,7 +224,8 @@ class MinecraftTransferBot {
             value: '• Cliquez sur le bouton ci-dessous pour démarrer un transfert\n' +
                    '• Utilisez `/build transfer destination:staging`\n' +
                    '• Surveillez les logs en temps réel\n' +
-                   '• ✨ **Tous les utilisateurs peuvent lancer un transfert**',
+                   '• ✨ **Tous les utilisateurs peuvent lancer un transfert**\n' +
+                   '• 📱 **Statut Discord mis à jour toutes les 5s**',
             inline: true
           }
         );
@@ -306,41 +355,58 @@ class MinecraftTransferBot {
       // Créer le service de transfert
       const transferService = new TransferService(srv1Config, srv2Config);
       
-      // Démarrer le transfert avec mise à jour en temps réel
-      await transferService.executeTransfer((tracker) => {
-        const embed = EmbedGenerator.createTransferEmbed(tracker);
-        interaction.editReply({ 
-          embeds: [embed],
-          components: [disabledRow]
-        }).catch(error => {
-          Logger.warning('Impossible de mettre à jour l\'embed', error);
+      // Configurer le callback de mise à jour du statut
+      transferService.setStatusUpdateCallback((status) => {
+        this.updateTransferStatus(status);
+      });
+
+      // Démarrer les mises à jour du statut Discord
+      this.startStatusUpdates();
+
+      try {
+        // Démarrer le transfert avec mise à jour en temps réel
+        await transferService.executeTransfer((tracker) => {
+          const embed = EmbedGenerator.createTransferEmbed(tracker);
+          interaction.editReply({ 
+            embeds: [embed],
+            components: [disabledRow]
+          }).catch(error => {
+            Logger.warning('Impossible de mettre à jour l\'embed', error);
+          });
         });
-      });
 
-      // Message final de succès avec bouton réactivé
-      const successEmbed = EmbedGenerator.createSuccessEmbed(
-        'Transfert terminé !',
-        'La map a été transférée avec succès du serveur Build vers Staging !'
-      );
+        // Message final de succès avec bouton réactivé
+        const successEmbed = EmbedGenerator.createSuccessEmbed(
+          'Transfert terminé !',
+          'La map a été transférée avec succès du serveur Build vers Staging !'
+        );
 
-      const enabledButton = new ButtonBuilder()
-        .setCustomId('start_transfer')
-        .setLabel('🚀 Démarrer un nouveau Transfert')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('🏗️');
+        const enabledButton = new ButtonBuilder()
+          .setCustomId('start_transfer')
+          .setLabel('🚀 Démarrer un nouveau Transfert')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🏗️');
 
-      const enabledRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(enabledButton);
+        const enabledRow = new ActionRowBuilder<ButtonBuilder>()
+          .addComponents(enabledButton);
 
-      await interaction.editReply({ 
-        embeds: [successEmbed],
-        components: [enabledRow]
-      });
+        await interaction.editReply({ 
+          embeds: [successEmbed],
+          components: [enabledRow]
+        });
 
-      Logger.success(`✅ Transfert terminé avec succès par ${interaction.user.tag} (via bouton)`);
+        Logger.success(`✅ Transfert terminé avec succès par ${interaction.user.tag} (via bouton)`);
+
+      } finally {
+        // Arrêter les mises à jour du statut
+        this.stopStatusUpdates();
+      }
 
     } catch (error: any) {
       Logger.error('❌ Erreur lors du transfert via bouton', error);
+
+      // Arrêter les mises à jour du statut en cas d'erreur
+      this.stopStatusUpdates();
 
       const errorEmbed = EmbedGenerator.createErrorEmbed(
         'Erreur lors du transfert',
@@ -385,6 +451,7 @@ class MinecraftTransferBot {
       Logger.success('🚀 Bot démarré avec succès !');
       Logger.info('💡 Pour déployer les commandes, utilisez: npm run deploy');
       Logger.info('🔓 Mode accès libre activé - tous les utilisateurs peuvent lancer des transferts');
+      Logger.info('📱 Statut Discord mis à jour toutes les 5 secondes pendant les transferts');
       
     } catch (error) {
       Logger.error('Erreur lors du démarrage du bot', error);
@@ -395,6 +462,10 @@ class MinecraftTransferBot {
   async shutdown(): Promise<void> {
     try {
       Logger.info('Fermeture du bot...');
+      
+      // Arrêter les mises à jour du statut
+      this.stopStatusUpdates();
+      
       this.client.destroy();
       Logger.success('Bot fermé proprement');
       process.exit(0);
@@ -434,6 +505,7 @@ async function main(): Promise<void> {
     Logger.info(`🐧 Plateforme: ${process.platform}`);
     Logger.info(`🟢 Node.js: ${process.version}`);
     Logger.info('🔓 Mode: Accès libre (tous les utilisateurs autorisés)');
+    Logger.info('📱 Statut: Mise à jour automatique du statut Discord activée');
 
     const bot = new MinecraftTransferBot();
     await bot.start();
