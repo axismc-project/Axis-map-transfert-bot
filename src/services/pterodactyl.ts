@@ -58,29 +58,57 @@ export class PterodactylService {
     }
   }
 
-  async waitForServerState(targetState: 'offline' | 'running', maxWaitTime: number = 60000): Promise<void> {
-    const startTime = Date.now();
-    
-    while (Date.now() - startTime < maxWaitTime) {
-      try {
-        const response = await this.client.get<PterodactylResponse<ServerStatus>>(`/servers/${this.config.serverId}`);
-        const currentState = response.data.attributes.current_state;
-        
-        Logger.debug(`État actuel du serveur: ${currentState}, attendu: ${targetState}`);
-        
-        if (currentState === targetState) {
-          Logger.success(`Serveur ${this.config.serverId} est maintenant ${targetState}`);
-          return;
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      } catch (error: any) {
-        Logger.warning(`Erreur lors de la vérification d'état`, error.message);
+async waitForServerState(targetState: 'offline' | 'running', maxWaitTime: number = 60000): Promise<void> {
+  const startTime = Date.now();
+  let lastState = 'unknown';
+  
+  Logger.info(`Attente de l'état "${targetState}" pour le serveur ${this.config.serverId}`);
+  
+  while (Date.now() - startTime < maxWaitTime) {
+    try {
+      const response = await this.client.get<PterodactylResponse<ServerStatus>>(`/servers/${this.config.serverId}/resources`);
+      
+      // Vérifier si la réponse contient les bonnes données
+      if (!response.data || !response.data.attributes) {
+        Logger.warning(`Réponse invalide de l'API Pterodactyl pour ${this.config.serverId}`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        continue;
       }
+
+      const currentState = response.data.attributes.current_state;
+      
+      // Log seulement si l'état change
+      if (currentState !== lastState) {
+        Logger.info(`Serveur ${this.config.serverId}: ${lastState} → ${currentState}`);
+        lastState = currentState;
+      }
+      
+      // Vérifier l'état cible
+      if (currentState === targetState) {
+        Logger.success(`✅ Serveur ${this.config.serverId} est maintenant ${targetState}`);
+        return;
+      }
+      
+      // Attendre avant la prochaine vérification
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+    } catch (error: any) {
+      Logger.warning(`Erreur lors de la vérification d'état du serveur ${this.config.serverId}:`, error.response?.status || error.message);
+      
+      // Si l'erreur indique que le serveur est arrêté et qu'on attend "offline"
+      if (targetState === 'offline' && (error.response?.status === 409 || error.response?.status === 502)) {
+        Logger.info(`Le serveur ${this.config.serverId} semble être offline (erreur ${error.response?.status})`);
+        return;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
-    
-    throw new Error(`Timeout: Le serveur n'a pas atteint l'état ${targetState} dans les ${maxWaitTime/1000}s`);
   }
+  
+  Logger.error(`❌ Timeout: Le serveur ${this.config.serverId} n'a pas atteint l'état ${targetState} dans les ${maxWaitTime/1000}s`);
+  Logger.info(`Dernier état connu: ${lastState}`);
+  throw new Error(`Timeout: Le serveur ${this.config.serverId} n'a pas atteint l'état ${targetState} dans les ${maxWaitTime/1000}s`);
+}
 
   async compressFolder(folderPath: string): Promise<string> {
     try {
