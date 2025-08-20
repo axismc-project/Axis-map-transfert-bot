@@ -21,7 +21,7 @@ export class ProgressTracker {
       'Redémarrage serveurs'
     ];
 
-    this.steps = stepsList.map((step, index) => ({
+    this.steps = stepsList.map((step) => ({
       step,
       progress: 0,
       status: 'pending' as const,

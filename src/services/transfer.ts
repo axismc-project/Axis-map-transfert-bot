@@ -172,3 +172,168 @@ export class TransferService {
       });
 
       Logger.success('🎉 Transfert de map terminé avec succès !');
+      } catch (error: any) {
+      Logger.error('❌ Erreur lors du transfert', error);
+      
+      // Marquer l'étape actuelle comme erreur
+      const currentStep = this.tracker.getCurrentStep();
+      if (currentStep >= 0) {
+        this.tracker.updateStep(currentStep, 'error', `Erreur: ${error.message}`, 0);
+        progressCallback?.(this.tracker);
+      }
+
+      // Tentative de rollback
+      await this.handleRollback();
+      throw error;
+
+    } finally {
+      // Nettoyage des connexions
+      await this.cleanup(srv1Connected, srv2Connected);
+    }
+  }
+
+  private async executeStep(stepIndex: number, stepName: string, operation: () => Promise<void>): Promise<void> {
+    try {
+      Logger.info(`🔄 Étape ${stepIndex + 1}: ${stepName}`);
+      this.tracker.updateStep(stepIndex, 'running', 'En cours...', 0);
+      
+      await operation();
+      
+      this.tracker.updateStep(stepIndex, 'completed', 'Terminé', 100);
+      Logger.success(`✅ Étape ${stepIndex + 1} terminée: ${stepName}`);
+    } catch (error) {
+      this.tracker.updateStep(stepIndex, 'error', `Erreur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`, 0);
+      throw error;
+    }
+  }
+
+  private async backupPlayerData(progressCallback?: (tracker: ProgressTracker) => void): Promise<void> {
+    try {
+      this.tracker.updateStep(3, 'running', 'Vérification playerdata...', 25);
+      progressCallback?.(this.tracker);
+      
+      // Vérifier si le dossier playerdata existe
+      const playerdataExists = await this.srv2Sftp.fileExists(`${this.srv2Config.worldPath}/playerdata`);
+      
+      if (playerdataExists) {
+        this.tracker.updateStep(3, 'running', 'Sauvegarde playerdata...', 50);
+        progressCallback?.(this.tracker);
+        
+        // Créer le dossier de cache temporaire
+        await fs.ensureDir(this.tempCachePath);
+        
+        // Télécharger le dossier playerdata
+        await this.srv2Sftp.downloadFolder(
+          `${this.srv2Config.worldPath}/playerdata`,
+          path.join(this.tempCachePath, 'playerdata')
+        );
+        
+        this.tracker.updateStep(3, 'running', 'Sauvegarde terminée', 100);
+        progressCallback?.(this.tracker);
+        
+        Logger.success('PlayerData sauvegardé dans le cache temporaire');
+      } else {
+        Logger.warning('Aucun dossier playerdata trouvé sur srv2, création d\'un dossier vide');
+        await fs.ensureDir(path.join(this.tempCachePath, 'playerdata'));
+      }
+    } catch (error: any) {
+      Logger.error('Erreur lors de la sauvegarde playerdata', error);
+      throw new Error(`Impossible de sauvegarder playerdata: ${error.message}`);
+    }
+  }
+
+  private async restorePlayerData(progressCallback?: (tracker: ProgressTracker) => void): Promise<void> {
+    try {
+      this.tracker.updateStep(8, 'running', 'Suppression playerdata srv1...', 25);
+      progressCallback?.(this.tracker);
+      
+      // Supprimer le playerdata de la map srv1 (nouvelle map)
+      try {
+        await this.srv2Ptero.deleteFolder('world/playerdata');
+        Logger.success('PlayerData de srv1 supprimé');
+      } catch (error) {
+        Logger.warning('Aucun playerdata srv1 à supprimer');
+      }
+
+      this.tracker.updateStep(8, 'running', 'Restauration playerdata srv2...', 50);
+      progressCallback?.(this.tracker);
+      
+      // Vérifier si nous avons une sauvegarde
+      const backupPath = path.join(this.tempCachePath, 'playerdata');
+      const backupExists = await fs.pathExists(backupPath);
+      
+      if (backupExists) {
+        // Restaurer le playerdata sauvegardé
+        await this.srv2Sftp.uploadFolder(
+          backupPath,
+          `${this.srv2Config.worldPath}/playerdata`
+        );
+        
+        this.tracker.updateStep(8, 'running', 'Restauration terminée', 100);
+        progressCallback?.(this.tracker);
+        
+        Logger.success('PlayerData de srv2 restauré');
+      } else {
+        Logger.warning('Aucune sauvegarde playerdata trouvée');
+      }
+
+      // Nettoyer le cache temporaire
+      try {
+        await fs.remove(this.tempCachePath);
+        Logger.debug('Cache temporaire nettoyé');
+      } catch (cleanupError) {
+        Logger.warning('Impossible de nettoyer le cache temporaire', cleanupError);
+      }
+      
+    } catch (error: any) {
+      Logger.error('Erreur lors de la restauration playerdata', error);
+      throw new Error(`Impossible de restaurer playerdata: ${error.message}`);
+    }
+  }
+
+  private async handleRollback(): Promise<void> {
+    try {
+      Logger.warning('🔄 Tentative de rollback...');
+      
+      // Redémarrer les serveurs s'ils sont arrêtés
+      try {
+        await Promise.all([
+          this.srv1Ptero.setPowerState('start'),
+          this.srv2Ptero.setPowerState('start')
+        ]);
+        Logger.info('Serveurs redémarrés après erreur');
+      } catch (rollbackError) {
+        Logger.error('Impossible de redémarrer les serveurs', rollbackError);
+      }
+
+      // Nettoyer le cache temporaire
+      try {
+        await fs.remove(this.tempCachePath);
+        Logger.debug('Cache temporaire nettoyé après erreur');
+      } catch (cleanupError) {
+        Logger.warning('Impossible de nettoyer le cache après erreur', cleanupError);
+      }
+
+    } catch (error) {
+      Logger.error('Erreur lors du rollback', error);
+    }
+  }
+
+  private async cleanup(srv1Connected: boolean, srv2Connected: boolean): Promise<void> {
+    try {
+      if (srv1Connected) {
+        await this.srv1Sftp.disconnect();
+      }
+      if (srv2Connected) {
+        await this.srv2Sftp.disconnect();
+      }
+      Logger.success('Connexions SFTP fermées');
+    } catch (error) {
+      Logger.warning('Erreur lors de la fermeture des connexions', error);
+    }
+  }
+
+  getTracker(): ProgressTracker {
+    return this.tracker;
+  }
+}
