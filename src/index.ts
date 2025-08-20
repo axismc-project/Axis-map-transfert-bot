@@ -3,10 +3,19 @@ import {
   GatewayIntentBits, 
   Collection, 
   CommandInteraction,
-  ActivityType
+  ActivityType,
+  TextChannel,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ButtonInteraction
 } from 'discord.js';
 import { config } from 'dotenv';
 import { Logger } from './utils/logger.js';
+import { TransferService } from './services/transfer.js';
+import { EmbedGenerator } from './utils/embed.js';
+import { ServerConfig } from './types/index.js';
 import * as buildCommand from './commands/build.js';
 
 // Charger les variables d'environnement
@@ -43,7 +52,7 @@ class MinecraftTransferBot {
 
   private setupEventHandlers(): void {
     // Event: Bot prêt
-    this.client.once('ready', () => {
+    this.client.once('ready', async () => {
       if (!this.client.user) return;
       
       Logger.success(`🤖 Bot connecté en tant que ${this.client.user.tag}`);
@@ -56,34 +65,17 @@ class MinecraftTransferBot {
 
       // Afficher les commandes disponibles
       Logger.info(`📋 Commandes disponibles: ${Array.from(this.commands.keys()).join(', ')}`);
+
+      // Envoyer l'embed de démarrage avec le bouton
+      await this.sendStartupEmbed();
     });
 
-    // Event: Interaction créée (slash commands)
+    // Event: Interaction créée (slash commands ET boutons)
     this.client.on('interactionCreate', async (interaction) => {
-      if (!interaction.isChatInputCommand()) return;
-
-      const command = this.commands.get(interaction.commandName);
-      if (!command) {
-        Logger.warning(`Commande inconnue: ${interaction.commandName}`);
-        return;
-      }
-
-      try {
-        Logger.info(`Exécution de /${interaction.commandName} par ${interaction.user.tag} sur ${interaction.guild?.name}`);
-        await command.execute(interaction);
-      } catch (error: any) {
-        Logger.error(`Erreur lors de l'exécution de /${interaction.commandName}`, error);
-        
-        const errorMessage = {
-          content: `❌ Une erreur est survenue lors de l'exécution de cette commande.\n\`\`\`${error.message}\`\`\``,
-          ephemeral: true
-        };
-
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(errorMessage);
-        } else {
-          await interaction.reply(errorMessage);
-        }
+      if (interaction.isChatInputCommand()) {
+        await this.handleSlashCommand(interaction);
+      } else if (interaction.isButton()) {
+        await this.handleButtonInteraction(interaction);
       }
     });
 
@@ -120,6 +112,270 @@ class MinecraftTransferBot {
       Logger.info('Signal SIGTERM reçu, arrêt du bot...');
       this.shutdown();
     });
+  }
+
+  private async sendStartupEmbed(): Promise<void> {
+    try {
+      const channelId = '1406532712285732944';
+      const channel = await this.client.channels.fetch(channelId) as TextChannel;
+      
+      if (!channel || !channel.isTextBased()) {
+        Logger.error(`Canal ${channelId} introuvable ou non-textuel`);
+        return;
+      }
+
+      // Créer l'embed de démarrage
+      const embed = new EmbedBuilder()
+        .setTitle('🚀 Minecraft Transfer Bot - Démarré !')
+        .setDescription('```yaml\n' +
+          '# ========================================\n' +
+          '# MINECRAFT MAP TRANSFER SYSTEM\n' +
+          '# ========================================\n' +
+          '\n' +
+          'status: ONLINE ✅\n' +
+          'version: v1.0.0\n' +
+          'uptime: Just started\n' +
+          '\n' +
+          'services:\n' +
+          '  - discord_bot: READY\n' +
+          '  - pterodactyl_api: STANDBY\n' +
+          '  - sftp_transfer: STANDBY\n' +
+          '\n' +
+          'servers:\n' +
+          '  source: BUILD_SERVER\n' +
+          '  target: STAGING_SERVER\n' +
+          '\n' +
+          'features:\n' +
+          '  - automatic_transfer: ENABLED\n' +
+          '  - playerdata_backup: ENABLED\n' +
+          '  - progress_tracking: ENABLED\n' +
+          '  - rollback_protection: ENABLED\n' +
+          '\n' +
+          'ready_for_transfer: true\n' +
+          '```')
+        .setColor(0x00ff00)
+        .setTimestamp()
+        .setFooter({ 
+          text: '🎮 Prêt pour les transferts de maps Minecraft',
+          iconURL: this.client.user?.displayAvatarURL()
+        })
+        .addFields(
+          {
+            name: '📊 Statistiques',
+            value: `\`\`\`\n` +
+                   `Serveurs Discord: ${this.client.guilds.cache.size}\n` +
+                   `Utilisateurs: ${this.client.users.cache.size}\n` +
+                   `Commandes: ${this.commands.size}\n` +
+                   `Ping: ${this.client.ws.ping}ms\n` +
+                   `\`\`\``,
+            inline: true
+          },
+          {
+            name: '🔧 Actions disponibles',
+            value: '• Cliquez sur le bouton ci-dessous pour démarrer un transfert\n' +
+                   '• Utilisez `/build transfer destination:staging`\n' +
+                   '• Surveillez les logs en temps réel',
+            inline: true
+          }
+        );
+
+      // Créer le bouton de transfert
+      const transferButton = new ButtonBuilder()
+        .setCustomId('start_transfer')
+        .setLabel('🚀 Démarrer le Transfert')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🏗️');
+
+      const row = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(transferButton);
+
+      // Envoyer le message
+      await channel.send({
+        embeds: [embed],
+        components: [row]
+      });
+
+      Logger.success(`✅ Embed de démarrage envoyé dans le canal ${channelId}`);
+
+    } catch (error: any) {
+      Logger.error('Erreur lors de l\'envoi de l\'embed de démarrage', error);
+    }
+  }
+
+  private async handleSlashCommand(interaction: CommandInteraction): Promise<void> {
+    const command = this.commands.get(interaction.commandName);
+    if (!command) {
+      Logger.warning(`Commande inconnue: ${interaction.commandName}`);
+      return;
+    }
+
+    try {
+      Logger.info(`Exécution de /${interaction.commandName} par ${interaction.user.tag} sur ${interaction.guild?.name}`);
+      await command.execute(interaction);
+    } catch (error: any) {
+      Logger.error(`Erreur lors de l'exécution de /${interaction.commandName}`, error);
+      
+      const errorMessage = {
+        content: `❌ Une erreur est survenue lors de l'exécution de cette commande.\n\`\`\`${error.message}\`\`\``,
+        ephemeral: true
+      };
+
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(errorMessage);
+      } else {
+        await interaction.reply(errorMessage);
+      }
+    }
+  }
+
+  private async handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
+    if (interaction.customId === 'start_transfer') {
+      await this.handleTransferButton(interaction);
+    }
+  }
+
+  private async handleTransferButton(interaction: ButtonInteraction): Promise<void> {
+    try {
+      // Vérifier les permissions
+      if (!interaction.memberPermissions?.has('Administrator')) {
+        await interaction.reply({
+          embeds: [EmbedGenerator.createErrorEmbed(
+            'Permissions insuffisantes',
+            'Seuls les administrateurs peuvent démarrer un transfert.'
+          )],
+          ephemeral: true
+        });
+        return;
+      }
+
+      // Vérifier les variables d'environnement
+      const requiredEnvVars = [
+        'SRV1_BASE_URL', 'SRV1_API_KEY', 'SRV1_SERVER_ID',
+        'SRV2_BASE_URL', 'SRV2_API_KEY', 'SRV2_SERVER_ID',
+        'SRV1_SFTP_HOST', 'SRV1_SFTP_USER', 'SRV1_SFTP_PASSWORD',
+        'SRV2_SFTP_HOST', 'SRV2_SFTP_USER', 'SRV2_SFTP_PASSWORD'
+      ];
+
+      const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+      
+      if (missingVars.length > 0) {
+        await interaction.reply({
+          embeds: [EmbedGenerator.createErrorEmbed(
+            'Configuration manquante',
+            `Variables d'environnement manquantes: ${missingVars.join(', ')}`
+          )],
+          ephemeral: true
+        });
+        return;
+      }
+
+      // Configuration des serveurs
+      const srv1Config: ServerConfig = {
+        baseUrl: process.env.SRV1_BASE_URL!,
+        apiKey: process.env.SRV1_API_KEY!,
+        serverId: process.env.SRV1_SERVER_ID!,
+        sftpHost: process.env.SRV1_SFTP_HOST!,
+        sftpPort: parseInt(process.env.SRV1_SFTP_PORT || '2022'),
+        sftpUser: process.env.SRV1_SFTP_USER!,
+        sftpPassword: process.env.SRV1_SFTP_PASSWORD!,
+        worldPath: process.env.SRV1_WORLD_PATH || '/home/container/world'
+      };
+
+      const srv2Config: ServerConfig = {
+        baseUrl: process.env.SRV2_BASE_URL!,
+        apiKey: process.env.SRV2_API_KEY!,
+        serverId: process.env.SRV2_SERVER_ID!,
+        sftpHost: process.env.SRV2_SFTP_HOST!,
+        sftpPort: parseInt(process.env.SRV2_SFTP_PORT || '2022'),
+        sftpUser: process.env.SRV2_SFTP_USER!,
+        sftpPassword: process.env.SRV2_SFTP_PASSWORD!,
+        worldPath: process.env.SRV2_WORLD_PATH || '/home/container/world'
+      };
+
+      // Désactiver le bouton pendant le transfert
+      const disabledButton = new ButtonBuilder()
+        .setCustomId('start_transfer')
+        .setLabel('🔄 Transfert en cours...')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⏳')
+        .setDisabled(true);
+
+      const disabledRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(disabledButton);
+
+      // Réponse initiale
+      const initialEmbed = EmbedGenerator.createInitialEmbed();
+      await interaction.reply({ 
+        embeds: [initialEmbed],
+        components: [disabledRow]
+      });
+
+      // Créer le service de transfert
+      const transferService = new TransferService(srv1Config, srv2Config);
+      
+      // Démarrer le transfert avec mise à jour en temps réel
+      await transferService.executeTransfer((tracker) => {
+        const embed = EmbedGenerator.createTransferEmbed(tracker);
+        interaction.editReply({ 
+          embeds: [embed],
+          components: [disabledRow]
+        }).catch(error => {
+          Logger.warning('Impossible de mettre à jour l\'embed', error);
+        });
+      });
+
+      // Message final de succès avec bouton réactivé
+      const successEmbed = EmbedGenerator.createSuccessEmbed(
+        'Transfert terminé !',
+        'La map a été transférée avec succès du serveur Build vers Staging !'
+      );
+
+      const enabledButton = new ButtonBuilder()
+        .setCustomId('start_transfer')
+        .setLabel('🚀 Démarrer un nouveau Transfert')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🏗️');
+
+      const enabledRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(enabledButton);
+
+      await interaction.editReply({ 
+        embeds: [successEmbed],
+        components: [enabledRow]
+      });
+
+      Logger.success(`Transfert terminé avec succès par ${interaction.user.tag} (via bouton)`);
+
+    } catch (error: any) {
+      Logger.error('Erreur lors du transfert via bouton', error);
+
+      const errorEmbed = EmbedGenerator.createErrorEmbed(
+        'Erreur lors du transfert',
+        `Erreur: ${error.message}`
+      );
+
+      // Réactiver le bouton en cas d'erreur
+      const enabledButton = new ButtonBuilder()
+        .setCustomId('start_transfer')
+        .setLabel('🚀 Réessayer le Transfert')
+        .setStyle(ButtonStyle.Danger)
+        .setEmoji('🔄');
+
+      const enabledRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(enabledButton);
+
+      try {
+        await interaction.editReply({ 
+          embeds: [errorEmbed],
+          components: [enabledRow]
+        });
+      } catch (editError) {
+        await interaction.followUp({ 
+          embeds: [errorEmbed], 
+          ephemeral: true 
+        });
+      }
+    }
   }
 
   async start(): Promise<void> {
