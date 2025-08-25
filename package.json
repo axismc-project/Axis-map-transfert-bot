@@ -1,7 +1,7 @@
 {
   "name": "minecraft-transfer-bot",
-  "version": "1.0.0",
-  "description": "Bot Discord pour transférer des maps Minecraft entre serveurs Pterodactyl",
+  "version": "3.2.0",
+  "description": "Bot Discord pour transférer des maps Minecraft entre serveurs Pterodactyl - v3.2 avec auto-refresh embed et auto-restart",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
@@ -31,7 +31,10 @@
     "transfer",
     "automation",
     "sftp",
-    "typescript"
+    "typescript",
+    "auto-refresh",
+    "auto-restart",
+    "extended-polling"
   ],
   "author": "Your Name <your.email@example.com>",
   "license": "MIT",

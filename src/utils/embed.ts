@@ -14,9 +14,10 @@ export class EmbedGenerator {
     
     // Header avec style JSON
     consoleContent += '{\n';
-    consoleContent += '  "transfer": "BUILD → STAGING v3.1",\n';
-    consoleContent += '  "method": "NORMAL_MESSAGE_UPDATE",\n';
-    consoleContent += '  "extraction": "ARRAY_SAFE_FIXED",\n';
+    consoleContent += '  "transfer": "BUILD → STAGING v3.2",\n';
+    consoleContent += '  "method": "AUTO_REFRESH_EMBED",\n';
+    consoleContent += '  "extraction": "EXTENDED_POLLING_2H",\n';
+    consoleContent += '  "auto_restart": "SRV1_AFTER_TRANSFER",\n';
     consoleContent += '  "status": "' + (hasErrors ? 'ERROR' : isCompleted ? 'COMPLETED' : 'RUNNING') + '",\n';
     consoleContent += `  "progress": "${this.generateProgressBar(overallProgress)} ${overallProgress}%",\n`;
     consoleContent += '  "steps": [\n';
@@ -35,7 +36,10 @@ export class EmbedGenerator {
       
       // Afficher le message détaillé pour l'étape en cours
       if (step.status === 'running' && step.message && step.message !== 'En cours...') {
-        consoleContent += `,\n      "details": "${step.message.substring(0, 50)}..."`;
+        const truncatedMessage = step.message.length > 50 
+          ? step.message.substring(0, 50) + '...' 
+          : step.message;
+        consoleContent += `,\n      "details": "${truncatedMessage}"`;
       }
       
       consoleContent += `\n    }${isLast ? '' : ','}\n`;
@@ -48,7 +52,7 @@ export class EmbedGenerator {
     if (hasErrors) {
       statusMessage = 'ERROR: Transfert interrompu - Rollback en cours';
     } else if (isCompleted) {
-      statusMessage = 'SUCCESS: Transfert terminé - Serveurs redémarrés';
+      statusMessage = 'SUCCESS: Transfert terminé - Auto-restart effectué';
     } else {
       const currentStepIndex = tracker.getCurrentStep();
       const currentStep = currentStepIndex >= 0 ? steps[currentStepIndex] : null;
@@ -56,6 +60,8 @@ export class EmbedGenerator {
     }
     
     consoleContent += `  "message": "${statusMessage}",\n`;
+    consoleContent += `  "embed_refresh": "15min_auto_recreation",\n`;
+    consoleContent += `  "extraction_timeout": "2h_with_5min_polling",\n`;
     consoleContent += `  "last_update": "${new Date().toISOString()}"\n`;
     consoleContent += '}\n';
     consoleContent += '```';
@@ -67,21 +73,21 @@ export class EmbedGenerator {
     else color = 0xfaa61a; // Orange
 
     const embed = new EmbedBuilder()
-      .setTitle('🏗️ Transfert de Map Minecraft v3.1')
+      .setTitle('🏗️ Transfert de Map Minecraft v3.2')
       .setDescription(consoleContent)
       .setColor(color)
       .setTimestamp();
 
     // Footer avec informations additionnelles
     if (isCompleted) {
-      embed.setFooter({ text: '✅ Transfert v3.1 terminé ! Messages normaux + extraction corrigée' });
+      embed.setFooter({ text: '✅ Transfert v3.2 terminé ! Auto-refresh + Auto-restart + Polling étendu' });
     } else if (hasErrors) {
-      embed.setFooter({ text: '❌ Erreur v3.1 - Rollback automatique en cours' });
+      embed.setFooter({ text: '❌ Erreur v3.2 - Rollback automatique en cours' });
     } else {
       const currentStepIndex = tracker.getCurrentStep();
       const totalSteps = steps.length;
       embed.setFooter({ 
-        text: `🔄 Étape ${currentStepIndex + 1}/${totalSteps} - Message normal mis à jour (5s)`
+        text: `🔄 Étape ${currentStepIndex + 1}/${totalSteps} - Auto-refresh (15min) + Polling étendu (5min)`
       });
     }
 
@@ -91,45 +97,49 @@ export class EmbedGenerator {
   static createInitialEmbed(): EmbedBuilder {
     const consoleContent = '```yaml\n' +
       '# ========================================\n' +
-      '# MINECRAFT MAP TRANSFER SYSTEM v3.1\n' +
+      '# MINECRAFT MAP TRANSFER SYSTEM v3.2\n' +
       '# ========================================\n' +
       '\n' +
       'transfer_status: INITIALIZING\n' +
-      'method: NORMAL_MESSAGE_UPDATE\n' +
-      'extraction: ARRAY_SAFE_POLLING\n' +
+      'method: AUTO_REFRESH_EMBED\n' +
+      'extraction: EXTENDED_POLLING_2H\n' +
+      'auto_restart: SRV1_AFTER_TRANSFER\n' +
       'progress: [░░░░░░░░░░░░░░░░░░░░] 0%\n' +
       '\n' +
       'current_step: "Préparation du transfert"\n' +
-      'update_method: "Message normal (stable)"\n' +
-      'update_interval: "5 secondes"\n' +
+      'update_method: "Message normal (auto-refresh)"\n' +
+      'update_interval: "5 secondes + 15min recreation"\n' +
       '\n' +
       'details:\n' +
       '  - "✓ Vérification des configurations"\n' +
       '  - "✓ Initialisation des services"\n' +
-      '  - "✓ Correction extraction (null checks)"\n' +
+      '  - "✓ Auto-refresh embed (15 minutes)"\n' +
+      '  - "✓ Extraction étendue (2h timeout)"\n' +
+      '  - "✓ Auto-restart srv1 après transfert"\n' +
       '  - "⏳ Connexion aux serveurs..."\n' +
       '\n' +
       'servers:\n' +
-      '  source: "BUILD SERVER"\n' +
+      '  source: "BUILD SERVER (auto-restart)"\n' +
       '  target: "STAGING SERVER"\n' +
       '  method: "SFTP_DIRECT_TRANSFER"\n' +
       '\n' +
-      'fixes_v3_1:\n' +
-      '  - "✅ Messages normaux (pas de webhooks)"\n' +
-      '  - "✅ Extraction sécurisée (array checks)"\n' +
-      '  - "✅ Polling robuste (error handling)"\n' +
-      '  - "✅ Statut Discord stable (5 secondes)"\n' +
-      '  - "✅ Embeds fiables (message normal)"\n' +
+      'improvements_v3_2:\n' +
+      '  - "🔄 Embed auto-refresh (15 minutes)"\n' +
+      '  - "⏰ Extraction timeout étendu (2 heures)"\n' +
+      '  - "🔍 Polling robuste (5 minutes)"\n' +
+      '  - "🚀 Auto-restart srv1 après transfert"\n' +
+      '  - "📋 Messages stables et persistants"\n' +
+      '  - "🎯 11 étapes optimisées"\n' +
       '\n' +
-      'status: "🔄 Initialisation v3.1 en cours..."\n' +
+      'status: "🔄 Initialisation v3.2 en cours..."\n' +
       '```';
 
     return new EmbedBuilder()
-      .setTitle('🚀 Initialisation du Transfert v3.1')
+      .setTitle('🚀 Initialisation du Transfert v3.2')
       .setDescription(consoleContent)
       .setColor(0x0099ff)
       .setTimestamp()
-      .setFooter({ text: '🔄 Préparation v3.1 - Message normal + extraction corrigée' });
+      .setFooter({ text: '🔄 Préparation v3.2 - Auto-refresh + Polling étendu + Auto-restart' });
   }
 
   private static generateProgressBar(progress: number): string {
@@ -152,7 +162,7 @@ export class EmbedGenerator {
   static createErrorEmbed(title: string, description: string, error?: any): EmbedBuilder {
     let consoleContent = '```diff\n';
     consoleContent += '- ========================================\n';
-    consoleContent += '- ERROR: TRANSFER FAILED v3.1\n';
+    consoleContent += '- ERROR: TRANSFER FAILED v3.2\n';
     consoleContent += '- ========================================\n';
     consoleContent += '\n';
     consoleContent += `! ${description}\n`;
@@ -169,13 +179,14 @@ export class EmbedGenerator {
     consoleContent += '+ • Verify SFTP credentials\n';
     consoleContent += '+ • Review server logs\n';
     consoleContent += '+ • Try again with the button\n';
-    consoleContent += '+ • Check extraction process\n';
+    consoleContent += '+ • Check extraction process (2h timeout)\n';
     consoleContent += '+ • Contact administrator if needed\n';
     consoleContent += '\n';
-    consoleContent += '+ v3.1 FEATURES:\n';
-    consoleContent += '+ • Normal messages (no webhook issues)\n';
-    consoleContent += '+ • Fixed extraction (array safety)\n';
-    consoleContent += '+ • Robust polling (error handling)\n';
+    consoleContent += '+ v3.2 FEATURES:\n';
+    consoleContent += '+ • Auto-refresh embed (15 minutes)\n';
+    consoleContent += '+ • Extended extraction (2h timeout)\n' +
+    consoleContent += '+ • Robust polling (5min intervals)\n';
+    consoleContent += '+ • Auto-restart srv1 after transfer\n';
     consoleContent += '```';
 
     return new EmbedBuilder()
@@ -183,13 +194,13 @@ export class EmbedGenerator {
       .setDescription(consoleContent)
       .setColor(0xf04747)
       .setTimestamp()
-      .setFooter({ text: '❌ Erreur v3.1 - Message normal + rollback automatique' });
+      .setFooter({ text: '❌ Erreur v3.2 - Auto-refresh + rollback automatique' });
   }
 
   static createSuccessEmbed(title: string, description: string): EmbedBuilder {
     const consoleContent = '```diff\n' +
       '+ ========================================\n' +
-      '+ SUCCESS: TRANSFER COMPLETED v3.1\n' +
+      '+ SUCCESS: TRANSFER COMPLETED v3.2\n' +
       '+ ========================================\n' +
       '\n' +
       `+ ${description}\n` +
@@ -197,19 +208,22 @@ export class EmbedGenerator {
       '+ SUMMARY:\n' +
       '+ • Map compressed and transferred ✅\n' +
       '+ • PlayerData preserved ✅\n' +
-      '+ • Servers restarted ✅\n' +
+      '+ • Servers restarted (srv1 auto) ✅\n' +
       '+ • Files cleaned up ✅\n' +
-      '+ • Extraction fixed ✅\n' +
-      '+ • Messages stable ✅\n' +
+      '+ • Extraction completed (extended polling) ✅\n' +
+      '+ • Embed auto-refreshed ✅\n' +
       '\n' +
-      '+ v3.1 IMPROVEMENTS:\n' +
-      '+ • Normal messages (no webhook tokens)\n' +
-      '+ • Safe array operations (null checks)\n' +
-      '+ • Robust error handling (polling)\n' +
-      '+ • Stable status updates (5 seconds)\n' +
-      '+ • Reliable embed updates (message edit)\n' +
+      '+ v3.2 IMPROVEMENTS:\n' +
+      '+ • Auto-refresh embed (recreation 15min)\n' +
+      '+ • Extended extraction (2h timeout, 5min polling)\n' +
+      '+ • Auto-restart srv1 (immediate after transfer)\n' +
+      '+ • Enhanced stability (message persistence)\n' +
+      '+ • Robust error handling (11 steps)\n' +
+      '+ • Optimized user experience (real-time)\n' +
       '\n' +
-      '+ 🎮 STAGING SERVER IS READY!\n' +
+      '+ 🎮 BOTH SERVERS ARE READY!\n' +
+      '+ 🏗️ BUILD SERVER: Auto-restarted\n' +
+      '+ 🎯 STAGING SERVER: Ready with new map\n' +
       '```';
 
     return new EmbedBuilder()
@@ -217,6 +231,6 @@ export class EmbedGenerator {
       .setDescription(consoleContent)
       .setColor(0x43b581)
       .setTimestamp()
-      .setFooter({ text: '✅ Succès v3.1 - Transfert terminé avec améliorations' });
+      .setFooter({ text: '✅ Succès v3.2 - Auto-refresh + Auto-restart + Polling étendu' });
   }
 }

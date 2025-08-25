@@ -16,6 +16,7 @@ import { config } from 'dotenv';
 import { Logger } from './utils/logger.js';
 import { TransferService } from './services/transfer.js';
 import { EmbedGenerator } from './utils/embed.js';
+import { ProgressTracker } from './utils/progress.js';
 import { ServerConfig } from './types/index.js';
 import * as buildCommand from './commands/build.js';
 
@@ -45,6 +46,11 @@ class MinecraftTransferBot {
   private commands: Collection<string, Command>;
   private statusUpdateInterval?: NodeJS.Timeout;
   private currentTransferStatus?: TransferStatusUpdate;
+  private embedRecreationInterval?: NodeJS.Timeout;
+  private currentTrackingMessage?: any;
+  private currentChannel?: any;
+  private currentUser?: any;
+  private currentTracker?: ProgressTracker;
 
   constructor() {
     this.client = new Client({
@@ -163,6 +169,46 @@ class MinecraftTransferBot {
     }
   }
 
+  // 🔄 NOUVELLES MÉTHODES POUR LA RÉCRÉATION D'EMBED
+  private startEmbedRecreation(): void {
+    this.embedRecreationInterval = setInterval(async () => {
+      try {
+        if (this.currentTrackingMessage && this.currentChannel && this.currentUser && this.currentTracker) {
+          Logger.info('🔄 Récréation de l\'embed (15 minutes écoulées)');
+          
+          // Supprimer l'ancien message
+          await this.currentTrackingMessage.delete().catch(() => {
+            Logger.warning('⚠️ Impossible de supprimer l\'ancien message embed');
+          });
+
+          // Créer un nouvel embed avec les données actuelles
+          const embed = EmbedGenerator.createTransferEmbed(this.currentTracker);
+          
+          // Créer un nouveau message
+          this.currentTrackingMessage = await this.currentChannel.send({
+            embeds: [embed],
+            content: `📊 **Suivi du transfert v3.2 demandé par ${this.currentUser}** - 🔄 Message recréé`
+          });
+
+          Logger.success(`✅ Nouveau message de suivi créé: ${this.currentTrackingMessage.id}`);
+        }
+      } catch (error) {
+        Logger.error('❌ Erreur lors de la récréation de l\'embed', error);
+      }
+    }, 15 * 60 * 1000); // 15 minutes
+  }
+
+  private stopEmbedRecreation(): void {
+    if (this.embedRecreationInterval) {
+      clearInterval(this.embedRecreationInterval);
+      this.embedRecreationInterval = undefined;
+    }
+    this.currentTrackingMessage = undefined;
+    this.currentChannel = undefined;
+    this.currentUser = undefined;
+    this.currentTracker = undefined;
+  }
+
   private updateTransferStatus(status: TransferStatusUpdate): void {
     this.currentTransferStatus = status;
   }
@@ -179,21 +225,21 @@ class MinecraftTransferBot {
 
       // Créer l'embed de démarrage
       const embed = new EmbedBuilder()
-        .setTitle('🚀 Minecraft Transfer Bot v3.1 - Messages Normaux!')
+        .setTitle('🚀 Minecraft Transfer Bot v3.2 - Embed Auto-Refresh!')
         .setDescription('```yaml\n' +
           '# ========================================\n' +
-          '# MINECRAFT MAP TRANSFER SYSTEM v3.1\n' +
+          '# MINECRAFT MAP TRANSFER SYSTEM v3.2\n' +
           '# ========================================\n' +
           '\n' +
           'status: ONLINE ✅\n' +
-          'version: v3.1.0\n' +
+          'version: v3.2.0\n' +
           'uptime: Just started\n' +
           '\n' +
           'services:\n' +
           '  - discord_bot: READY\n' +
           '  - pterodactyl_api: ENHANCED\n' +
           '  - sftp_transfer: OPTIMIZED\n' +
-          '  - extraction_polling: FIXED\n' +
+          '  - extraction_polling: 5MIN_EXTENDED\n' +
           '\n' +
           'servers:\n' +
           '  source: BUILD_SERVER\n' +
@@ -204,18 +250,15 @@ class MinecraftTransferBot {
           '  - playerdata_backup: ENABLED\n' +
           '  - progress_tracking: REAL_TIME\n' +
           '  - rollback_protection: ENHANCED\n' +
-          '  - message_updates: NORMAL_MESSAGES\n' +
-          '  - embed_updates: 5 SECONDS\n' +
-          '  - status_updates: 5 SECONDS\n' +
-          '  - extraction_fix: ARRAY_SAFE\n' +
+          '  - embed_recreation: 15_MINUTES\n' +
+          '  - extraction_timeout: 2_HOURS\n' +
+          '  - server1_restart: AUTO_AFTER_TRANSFER\n' +
           '\n' +
           'optimizations:\n' +
-          '  - no_webhook_tokens: TRUE\n' +
-          '  - normal_messages: STABLE\n' +
-          '  - smart_polling: 5s_intervals\n' +
-          '  - extraction_safe: NULL_CHECKS\n' +
-          '  - embed_refresh: 5s\n' +
-          '  - status_refresh: 5s\n' +
+          '  - embed_refresh: AUTO_RECREATION\n' +
+          '  - extraction_polling: 5min_intervals\n' +
+          '  - transfer_completion: srv1_auto_restart\n' +
+          '  - message_stability: 15min_recreation\n' +
           '\n' +
           'ready_for_transfer: true\n' +
           'access_level: PUBLIC\n' +
@@ -223,7 +266,7 @@ class MinecraftTransferBot {
         .setColor(0x00ff00)
         .setTimestamp()
         .setFooter({ 
-          text: '🎮 v3.1 - Messages normaux - Extraction corrigée - Stable',
+          text: '🎮 v3.2 - Auto-refresh embeds - Extended extraction - Auto restart',
           iconURL: this.client.user?.displayAvatarURL()
         })
         .addFields(
@@ -238,13 +281,13 @@ class MinecraftTransferBot {
             inline: true
           },
           {
-            name: '🔧 Nouveautés v3.1',
-            value: '• **Messages normaux** (plus de webhooks)\n' +
-                   '• **Extraction corrigée** (null checks)\n' +
-                   '• **Polling sécurisé** avec gestion d\'erreurs\n' +
-                   '• **Statut Discord** (5 secondes)\n' +
-                   '• **Embeds stables** (5 secondes)\n' +
-                   '• **Performance maximale** garantie',
+            name: '🔧 Nouveautés v3.2',
+            value: '• **Embed auto-refresh** (toutes les 15min)\n' +
+                   '• **Extraction étendue** (vérification 5min)\n' +
+                   '• **Timeout 2 heures** pour décompression\n' +
+                   '• **Auto-restart srv1** après transfert\n' +
+                   '• **Stabilité garantie** (messages persistants)\n' +
+                   '• **Polling robuste** (gestion d\'erreurs)',
             inline: true
           }
         );
@@ -252,7 +295,7 @@ class MinecraftTransferBot {
       // Créer le bouton de transfert
       const transferButton = new ButtonBuilder()
         .setCustomId('start_transfer')
-        .setLabel('🚀 Démarrer Transfert v3.1')
+        .setLabel('🚀 Démarrer Transfert v3.2')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('⚡');
 
@@ -265,7 +308,7 @@ class MinecraftTransferBot {
         components: [row]
       });
 
-      Logger.success(`✅ Embed de démarrage v3.1 envoyé dans le canal ${channelId}`);
+      Logger.success(`✅ Embed de démarrage v3.2 envoyé dans le canal ${channelId}`);
 
     } catch (error: any) {
       Logger.error('Erreur lors de l\'envoi de l\'embed de démarrage', error);
@@ -314,7 +357,7 @@ class MinecraftTransferBot {
 
   private async handleTransferButton(interaction: ButtonInteraction): Promise<void> {
     try {
-      Logger.info(`🚀 Transfert v3.1 demandé par ${interaction.user.tag} (${interaction.user.id})`);
+      Logger.info(`🚀 Transfert v3.2 demandé par ${interaction.user.tag} (${interaction.user.id})`);
 
       // Vérifier les variables d'environnement
       const requiredEnvVars = [
@@ -362,7 +405,7 @@ class MinecraftTransferBot {
 
       // ✅ RÉPONSE IMMÉDIATE À L'INTERACTION (évite timeout)
       await interaction.reply({
-        content: '🚀 **Transfert v3.1 démarré !** Message de suivi envoyé ci-dessous...',
+        content: '🚀 **Transfert v3.2 démarré !** Message de suivi envoyé ci-dessous...',
         ephemeral: false
       });
 
@@ -376,16 +419,20 @@ class MinecraftTransferBot {
         return;
       }
 
+      // 🔄 SAUVEGARDER LES RÉFÉRENCES POUR LA RÉCRÉATION D'EMBED
+      this.currentChannel = channel;
+      this.currentUser = interaction.user;
+
       // Créer l'embed initial
       const initialEmbed = EmbedGenerator.createInitialEmbed();
       
       // ✅ ENVOYER UN MESSAGE NORMAL (pas d'interaction)
-      const trackingMessage = await channel.send({
+      this.currentTrackingMessage = await channel.send({
         embeds: [initialEmbed],
-        content: `📊 **Suivi du transfert v3.1 demandé par ${interaction.user}**`
+        content: `📊 **Suivi du transfert v3.2 demandé par ${interaction.user}**`
       });
 
-      Logger.success(`✅ Message de suivi créé: ${trackingMessage.id}`);
+      Logger.success(`✅ Message de suivi créé: ${this.currentTrackingMessage.id}`);
 
       // Créer le service de transfert
       const transferService = new TransferService(srv1Config, srv2Config);
@@ -398,20 +445,26 @@ class MinecraftTransferBot {
       // Démarrer les mises à jour du statut Discord
       this.startStatusUpdates();
 
+      // 🔄 DÉMARRER LA RÉCRÉATION D'EMBED TOUTES LES 15 MINUTES
+      this.startEmbedRecreation();
+
       try {
         // ✅ TRANSFERT AVEC MISES À JOUR DU MESSAGE NORMAL
         let lastUpdateTime = 0;
         
         await transferService.executeTransfer((tracker) => {
+          // Sauvegarder le tracker pour la récréation d'embed
+          this.currentTracker = tracker;
+          
           const now = Date.now();
           // Mettre à jour le message normal toutes les 5 secondes
           if (now - lastUpdateTime >= 5000) {
             const embed = EmbedGenerator.createTransferEmbed(tracker);
             
             // ✅ ÉDITER LE MESSAGE NORMAL (pas de webhook)
-            trackingMessage.edit({ 
+            this.currentTrackingMessage.edit({ 
               embeds: [embed],
-              content: `📊 **Suivi du transfert v3.1 demandé par ${interaction.user}** - 🔄 En cours...`
+              content: `📊 **Suivi du transfert v3.2 demandé par ${interaction.user}** - 🔄 En cours...`
             }).catch((error: any) => {
               Logger.warning('Impossible de mettre à jour le message de suivi', error);
             });
@@ -422,32 +475,34 @@ class MinecraftTransferBot {
 
         // ✅ MESSAGE FINAL DE SUCCÈS
         const successEmbed = EmbedGenerator.createSuccessEmbed(
-          'Transfert v3.1 terminé !',
-          'La map a été transférée avec succès avec l\'extraction corrigée !'
+          'Transfert v3.2 terminé !',
+          'La map a été transférée avec succès avec auto-refresh et auto-restart !'
         );
 
-        await trackingMessage.edit({ 
+        await this.currentTrackingMessage.edit({ 
           embeds: [successEmbed],
-          content: `📊 **Transfert v3.1 demandé par ${interaction.user}** - ✅ **TERMINÉ AVEC SUCCÈS !**`
+          content: `📊 **Transfert v3.2 demandé par ${interaction.user}** - ✅ **TERMINÉ AVEC SUCCÈS !**`
         });
 
-        Logger.success(`✅ Transfert v3.1 terminé avec succès par ${interaction.user.tag} (via bouton)`);
+        Logger.success(`✅ Transfert v3.2 terminé avec succès par ${interaction.user.tag} (via bouton)`);
 
       } finally {
-        // Arrêter les mises à jour du statut
+        // Arrêter les mises à jour du statut et la récréation d'embed
         this.stopStatusUpdates();
+        this.stopEmbedRecreation();
       }
 
     } catch (error: any) {
-      Logger.error('❌ Erreur lors du transfert v3.1 via bouton', error);
+      Logger.error('❌ Erreur lors du transfert v3.2 via bouton', error);
 
-      // Arrêter les mises à jour du statut en cas d'erreur
+      // Arrêter les mises à jour en cas d'erreur
       this.stopStatusUpdates();
+      this.stopEmbedRecreation();
 
       try {
         // Essayer de mettre à jour le message de suivi avec l'erreur
         const errorEmbed = EmbedGenerator.createErrorEmbed(
-          'Erreur lors du transfert v3.1',
+          'Erreur lors du transfert v3.2',
           `Erreur: ${error.message}`
         );
 
@@ -458,19 +513,19 @@ class MinecraftTransferBot {
           const messages = await channel.messages.fetch({ limit: 10 });
           const trackingMessage = messages.find(msg => 
             msg.author.id === this.client.user?.id && 
-            msg.content.includes(`Suivi du transfert v3.1 demandé par ${interaction.user}`)
+            msg.content.includes(`Suivi du transfert v3.2 demandé par ${interaction.user}`)
           );
 
           if (trackingMessage) {
             await trackingMessage.edit({ 
               embeds: [errorEmbed],
-              content: `📊 **Transfert v3.1 demandé par ${interaction.user}** - ❌ **ERREUR**`
+              content: `📊 **Transfert v3.2 demandé par ${interaction.user}** - ❌ **ERREUR**`
             });
           } else {
             // Fallback: envoyer un nouveau message d'erreur
             await channel.send({
               embeds: [errorEmbed],
-              content: `❌ **Erreur du transfert v3.1 demandé par ${interaction.user}**`
+              content: `❌ **Erreur du transfert v3.2 demandé par ${interaction.user}**`
             });
           }
         }
@@ -481,7 +536,7 @@ class MinecraftTransferBot {
         // Fallback ultime: followUp sur l'interaction
         try {
           await interaction.followUp({ 
-            content: `❌ **Erreur lors du transfert v3.1**: ${error.message}`,
+            content: `❌ **Erreur lors du transfert v3.2**: ${error.message}`,
             ephemeral: true 
           });
         } catch (followUpError) {
@@ -502,32 +557,34 @@ class MinecraftTransferBot {
       // Connecter le bot
       await this.client.login(token);
       
-      Logger.success('🚀 Bot v3.1 démarré avec succès !');
+      Logger.success('🚀 Bot v3.2 démarré avec succès !');
       Logger.info('💡 Pour déployer les commandes, utilisez: npm run deploy');
       Logger.info('🔓 Mode accès libre activé - tous les utilisateurs peuvent lancer des transferts');
       Logger.info('📱 Statut Discord mis à jour toutes les 5 secondes pendant les transferts');
       Logger.info('📋 Embeds mis à jour toutes les 5 secondes (messages normaux)');
-      Logger.info('🚫 Webhooks complètement supprimés');
-      Logger.info('🔍 Extraction corrigée avec vérifications null/undefined');
+      Logger.info('🔄 Embeds recréés automatiquement toutes les 15 minutes');
+      Logger.info('⏰ Extraction avec timeout de 2 heures (polling toutes les 5 minutes)');
+      Logger.info('🔄 Auto-restart du serveur 1 après transfert terminé');
       
     } catch (error) {
-      Logger.error('Erreur lors du démarrage du bot v3.1', error);
+      Logger.error('Erreur lors du démarrage du bot v3.2', error);
       throw error;
     }
   }
 
   async shutdown(): Promise<void> {
     try {
-      Logger.info('Fermeture du bot v3.1...');
+      Logger.info('Fermeture du bot v3.2...');
       
-      // Arrêter les mises à jour du statut
+      // Arrêter les mises à jour du statut et la récréation d'embed
       this.stopStatusUpdates();
+      this.stopEmbedRecreation();
       
       this.client.destroy();
-      Logger.success('Bot v3.1 fermé proprement');
+      Logger.success('Bot v3.2 fermé proprement');
       process.exit(0);
     } catch (error) {
-      Logger.error('Erreur lors de la fermeture v3.1', error);
+      Logger.error('Erreur lors de la fermeture v3.2', error);
       process.exit(1);
     }
   }
@@ -557,21 +614,22 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    Logger.info('🚀 Démarrage du Minecraft Transfer Bot v3.1...');
+    Logger.info('🚀 Démarrage du Minecraft Transfer Bot v3.2...');
     Logger.info(`📍 Environnement: ${process.env.NODE_ENV || 'development'}`);
     Logger.info(`🐧 Plateforme: ${process.platform}`);
     Logger.info(`🟢 Node.js: ${process.version}`);
     Logger.info('🔓 Mode: Accès libre (tous les utilisateurs autorisés)');
     Logger.info('📱 Statut Discord: Mise à jour automatique (5 secondes)');
     Logger.info('📋 Embeds: Messages normaux (5 secondes)');
-    Logger.info('🚫 Webhooks: Complètement supprimés');
-    Logger.info('🔍 Extraction: Polling sécurisé avec null checks');
+    Logger.info('🔄 Auto-refresh: Embeds recréés toutes les 15 minutes');
+    Logger.info('⏰ Extraction: Timeout 2h avec polling 5min');
+    Logger.info('🔄 Auto-restart: Serveur 1 redémarre après transfert');
 
     const bot = new MinecraftTransferBot();
     await bot.start();
 
   } catch (error) {
-    Logger.error('Erreur fatale lors du démarrage v3.1', error);
+    Logger.error('Erreur fatale lors du démarrage v3.2', error);
     process.exit(1);
   }
 }

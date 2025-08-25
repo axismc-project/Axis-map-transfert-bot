@@ -9,16 +9,17 @@ export class ProgressTracker {
 
   private initializeSteps(): void {
     const stepsList = [
-      'Notification des serveurs',
+      'Préparation du transfert',
       'Arrêt srv1 & srv2',
       'Compression /world srv1',
       'Sauvegarde playerdata srv2',
       'Transfert SFTP srv1 → srv2',
+      'Auto-restart serveur Build', // 🆕 NOUVELLE ÉTAPE
       'Suppression ancien /world srv2',
-      'Décompression nouvelle map',
+      'Décompression nouvelle map', // Avec polling étendu 2h
       'Nettoyage fichiers',
       'Restauration playerdata srv2',
-      'Redémarrage serveurs'
+      'Redémarrage serveur Staging'
     ];
 
     this.steps = stepsList.map((step) => ({

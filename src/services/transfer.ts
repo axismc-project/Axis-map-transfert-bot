@@ -44,14 +44,13 @@ export class TransferService {
     let srv2Connected = false;
 
     try {
-      Logger.info('🚀 Début du transfert de map Build → Staging v3.0 (Sans webhooks)');
+      Logger.info('🚀 Début du transfert de map Build → Staging v3.2 (Auto-refresh + Auto-restart)');
 
-      // Étape 1: Préparation (pas de notifications)
+      // Étape 1: Préparation
       await this.executeStep(0, 'Préparation du transfert', async () => {
         this.tracker.updateStep(0, 'running', 'Initialisation...', 50);
         progressCallback?.(this.tracker);
 
-        // Attendre juste 2 secondes pour la préparation
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         this.tracker.updateStep(0, 'running', 'Préparation terminée', 100);
@@ -134,9 +133,27 @@ export class TransferService {
         Logger.success('✅ Transfert SFTP terminé');
       });
 
-      // Étape 6: Suppression ancien /world srv2
-      await this.executeStep(5, 'Suppression ancien /world srv2', async () => {
-        this.tracker.updateStep(5, 'running', 'Suppression de l\'ancienne map...', 50);
+      // 🔄 NOUVEAU : Auto-restart du serveur 1 dès que le transfert est terminé
+      await this.executeStep(5, 'Auto-restart serveur Build', async () => {
+        this.tracker.updateStep(5, 'running', 'Redémarrage automatique du serveur Build...', 50);
+        progressCallback?.(this.tracker);
+        
+        try {
+          await this.srv1Ptero.setPowerState('start');
+          Logger.success('✅ Serveur Build redémarré automatiquement après transfert');
+          
+          this.tracker.updateStep(5, 'running', 'Serveur Build redémarré', 100);
+          progressCallback?.(this.tracker);
+        } catch (error) {
+          Logger.warning('⚠️ Impossible de redémarrer automatiquement le serveur Build', error);
+          this.tracker.updateStep(5, 'running', 'Redémarrage manuel requis pour srv1', 100);
+          progressCallback?.(this.tracker);
+        }
+      });
+
+      // Étape 6: Suppression ancien /world srv2 (ancienne étape 5)
+      await this.executeStep(6, 'Suppression ancien /world srv2', async () => {
+        this.tracker.updateStep(6, 'running', 'Suppression de l\'ancienne map...', 50);
         progressCallback?.(this.tracker);
         
         try {
@@ -147,23 +164,25 @@ export class TransferService {
         }
       });
 
-      // Étape 7: Décompression nouvelle map (avec polling intelligent)
-      await this.executeStep(6, 'Décompression nouvelle map', async () => {
-        this.tracker.updateStep(6, 'running', 'Extraction en cours (polling intelligent)...', 25);
+      // Étape 7: Décompression nouvelle map (avec polling étendu 2h) (ancienne étape 6)
+      await this.executeStep(7, 'Décompression nouvelle map', async () => {
+        this.tracker.updateStep(7, 'running', 'Extraction en cours (polling 5min, timeout 2h)...', 10);
         progressCallback?.(this.tracker);
         
-        // Nouvelle méthode avec polling
+        Logger.info('⏰ Démarrage extraction avec timeout étendu (2h max, vérification toutes les 5min)');
+        
+        // Méthode avec polling étendu modifiée
         await this.srv2Ptero.extractArchive(this.archiveName, '/');
         
-        this.tracker.updateStep(6, 'running', 'Extraction terminée', 100);
+        this.tracker.updateStep(7, 'running', 'Extraction terminée', 100);
         progressCallback?.(this.tracker);
-        Logger.success('✅ Nouvelle map extraite');
+        Logger.success('✅ Nouvelle map extraite (polling étendu)');
       });
 
-      // Étape 8: Nettoyage des fichiers
-      await this.executeStep(7, 'Nettoyage fichiers', async () => {
+      // Étape 8: Nettoyage des fichiers (ancienne étape 7)
+      await this.executeStep(8, 'Nettoyage fichiers', async () => {
         // Suppression de l'archive sur les deux serveurs
-        this.tracker.updateStep(7, 'running', 'Suppression archive srv1...', 20);
+        this.tracker.updateStep(8, 'running', 'Suppression archive srv1...', 20);
         progressCallback?.(this.tracker);
         
         try {
@@ -173,7 +192,7 @@ export class TransferService {
           Logger.warning('⚠️ Archive non trouvée sur srv1');
         }
 
-        this.tracker.updateStep(7, 'running', 'Suppression archive srv2...', 40);
+        this.tracker.updateStep(8, 'running', 'Suppression archive srv2...', 40);
         progressCallback?.(this.tracker);
         
         try {
@@ -184,7 +203,7 @@ export class TransferService {
         }
 
         // Suppression des fichiers indésirables dans world
-        this.tracker.updateStep(7, 'running', 'Nettoyage /world/stats...', 60);
+        this.tracker.updateStep(8, 'running', 'Nettoyage /world/stats...', 60);
         progressCallback?.(this.tracker);
         
         try {
@@ -194,7 +213,7 @@ export class TransferService {
           Logger.warning('⚠️ Dossier stats non trouvé');
         }
 
-        this.tracker.updateStep(7, 'running', 'Suppression icon.png...', 80);
+        this.tracker.updateStep(8, 'running', 'Suppression icon.png...', 80);
         progressCallback?.(this.tracker);
         
         try {
@@ -205,36 +224,34 @@ export class TransferService {
         }
       });
 
-      // Étape 9: Restauration playerdata srv2
-      await this.executeStep(8, 'Restauration playerdata srv2', async () => {
+      // Étape 9: Restauration playerdata srv2 (ancienne étape 8)
+      await this.executeStep(9, 'Restauration playerdata srv2', async () => {
         await this.restorePlayerData(progressCallback);
       });
 
-      // Étape 10: Redémarrage des serveurs
-      await this.executeStep(9, 'Redémarrage serveurs', async () => {
-        this.tracker.updateStep(9, 'running', 'Démarrage du serveur Build...', 25);
-        progressCallback?.(this.tracker);
-        await this.srv1Ptero.setPowerState('start');
-        Logger.success('✅ Serveur Build redémarré');
-
-        this.tracker.updateStep(9, 'running', 'Démarrage du serveur Staging...', 50);
+      // Étape 10: Redémarrage serveur Staging seulement (ancienne étape 9 modifiée)
+      await this.executeStep(10, 'Redémarrage serveur Staging', async () => {
+        // Le serveur Build est déjà redémarré à l'étape 5
+        this.tracker.updateStep(10, 'running', 'Démarrage du serveur Staging...', 50);
         progressCallback?.(this.tracker);
         await this.srv2Ptero.setPowerState('start');
         Logger.success('✅ Serveur Staging redémarré');
 
-        this.tracker.updateStep(9, 'running', 'Attente démarrage complet (45s)...', 75);
+        this.tracker.updateStep(10, 'running', 'Attente démarrage complet Staging (45s)...', 75);
         progressCallback?.(this.tracker);
-        await Promise.all([
-          this.srv1Ptero.waitForServerState('running', 45000),
-          this.srv2Ptero.waitForServerState('running', 45000)
-        ]);
-        Logger.success('✅ Serveurs démarrés');
+        await this.srv2Ptero.waitForServerState('running', 45000);
+        Logger.success('✅ Serveur Staging démarré');
+        
+        this.tracker.updateStep(10, 'running', 'Les deux serveurs sont opérationnels', 100);
+        progressCallback?.(this.tracker);
       });
 
-      Logger.success('🎉 Transfert de map v3.0 terminé avec succès (sans webhooks) !');
+      Logger.success('🎉 Transfert de map v3.2 terminé avec succès (auto-refresh + auto-restart) !');
+      Logger.info('🔄 Serveur Build : Redémarré automatiquement après transfert');
+      Logger.info('🎯 Serveur Staging : Redémarré avec la nouvelle map');
 
     } catch (error: any) {
-      Logger.error('❌ Erreur lors du transfert v3.0', error);
+      Logger.error('❌ Erreur lors du transfert v3.2', error);
 
       // Marquer l'étape actuelle comme erreur
       const currentStep = this.tracker.getCurrentStep();
@@ -258,7 +275,7 @@ export class TransferService {
 
   private async executeStep(stepIndex: number, stepName: string, operation: () => Promise<void>): Promise<void> {
     try {
-      Logger.info(`🔄 Étape ${stepIndex + 1}/10: ${stepName}`);
+      Logger.info(`🔄 Étape ${stepIndex + 1}/11: ${stepName}`);
       this.tracker.updateStep(stepIndex, 'running', 'En cours...', 0);
 
       const startTime = Date.now();
@@ -266,7 +283,7 @@ export class TransferService {
       const duration = Date.now() - startTime;
 
       this.tracker.updateStep(stepIndex, 'completed', `Terminé (${Math.round(duration/1000)}s)`, 100);
-      Logger.success(`✅ Étape ${stepIndex + 1}/10 terminée en ${Math.round(duration/1000)}s: ${stepName}`);
+      Logger.success(`✅ Étape ${stepIndex + 1}/11 terminée en ${Math.round(duration/1000)}s: ${stepName}`);
     } catch (error) {
       this.tracker.updateStep(stepIndex, 'error', `Erreur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`, 0);
       throw error;
@@ -305,55 +322,55 @@ export class TransferService {
         
         Logger.warning('⚠️ Aucun dossier playerdata trouvé sur srv2, création d\'un dossier vide');
         await fs.ensureDir(path.join(this.tempCachePath, 'playerdata'));
-        
-        this.tracker.updateStep(3, 'running', 'Dossier vide créé', 100);
-        progressCallback?.(this.tracker);
-      }
-    } catch (error: any) {
-      Logger.error('❌ Erreur lors de la sauvegarde playerdata', error);
-      throw new Error(`Impossible de sauvegarder playerdata: ${error.message}`);
-    }
-  }
+       
+       this.tracker.updateStep(3, 'running', 'Dossier vide créé', 100);
+       progressCallback?.(this.tracker);
+     }
+   } catch (error: any) {
+     Logger.error('❌ Erreur lors de la sauvegarde playerdata', error);
+     throw new Error(`Impossible de sauvegarder playerdata: ${error.message}`);
+   }
+ }
 
-  private async restorePlayerData(progressCallback?: (tracker: ProgressTracker) => void): Promise<void> {
-    try {
-      this.tracker.updateStep(8, 'running', 'Suppression playerdata srv1...', 25);
-      progressCallback?.(this.tracker);
+ private async restorePlayerData(progressCallback?: (tracker: ProgressTracker) => void): Promise<void> {
+   try {
+     this.tracker.updateStep(9, 'running', 'Suppression playerdata srv1...', 25);
+     progressCallback?.(this.tracker);
 
-      // Supprimer le playerdata de la map srv1 (nouvelle map)
-      try {
-        await this.srv2Ptero.deleteFolder('world/playerdata');
-        Logger.success('✅ PlayerData de srv1 supprimé');
-      } catch (error) {
-        Logger.warning('⚠️ Aucun playerdata srv1 à supprimer');
-      }
+     // Supprimer le playerdata de la map srv1 (nouvelle map)
+     try {
+       await this.srv2Ptero.deleteFolder('world/playerdata');
+       Logger.success('✅ PlayerData de srv1 supprimé');
+     } catch (error) {
+       Logger.warning('⚠️ Aucun playerdata srv1 à supprimer');
+     }
 
-      this.tracker.updateStep(8, 'running', 'Restauration playerdata srv2...', 50);
-      progressCallback?.(this.tracker);
+     this.tracker.updateStep(9, 'running', 'Restauration playerdata srv2...', 50);
+     progressCallback?.(this.tracker);
 
-      // Vérifier si nous avons une sauvegarde
-      const backupPath = path.join(this.tempCachePath, 'playerdata');
-      const backupExists = await fs.pathExists(backupPath);
+     // Vérifier si nous avons une sauvegarde
+     const backupPath = path.join(this.tempCachePath, 'playerdata');
+     const backupExists = await fs.pathExists(backupPath);
 
-      if (backupExists) {
-        // Restaurer le playerdata sauvegardé
-        await this.srv2Sftp.uploadFolder(
-          backupPath,
-          'world/playerdata'
-        );
+     if (backupExists) {
+       // Restaurer le playerdata sauvegardé
+       await this.srv2Sftp.uploadFolder(
+         backupPath,
+         'world/playerdata'
+       );
 
-        this.tracker.updateStep(8, 'running', 'Restauration terminée', 100);
-        progressCallback?.(this.tracker);
+       this.tracker.updateStep(9, 'running', 'Restauration terminée', 100);
+       progressCallback?.(this.tracker);
 
-        Logger.success('✅ PlayerData de srv2 restauré');
-      } else {
-        this.tracker.updateStep(8, 'running', 'Aucune sauvegarde trouvée', 90);
-        progressCallback?.(this.tracker);
-        Logger.warning('⚠️ Aucune sauvegarde playerdata trouvée');
-      }
+       Logger.success('✅ PlayerData de srv2 restauré');
+     } else {
+       this.tracker.updateStep(9, 'running', 'Aucune sauvegarde trouvée', 90);
+       progressCallback?.(this.tracker);
+       Logger.warning('⚠️ Aucune sauvegarde playerdata trouvée');
+     }
 
-      // Nettoyer le cache temporaire
-this.tracker.updateStep(8, 'running', 'Nettoyage cache temporaire...', 95);
+     // Nettoyer le cache temporaire
+     this.tracker.updateStep(9, 'running', 'Nettoyage cache temporaire...', 95);
      progressCallback?.(this.tracker);
      
      try {
@@ -371,7 +388,7 @@ this.tracker.updateStep(8, 'running', 'Nettoyage cache temporaire...', 95);
 
  private async handleRollback(): Promise<void> {
    try {
-     Logger.warning('🔄 Début du rollback complet v3.0...');
+     Logger.warning('🔄 Début du rollback complet v3.2...');
 
      // 1. Nettoyer le cache temporaire
      try {
@@ -401,7 +418,7 @@ this.tracker.updateStep(8, 'running', 'Nettoyage cache temporaire...', 95);
        }
      }
 
-     // 4. Redémarrer les serveurs s'ils sont arrêtés
+     // 4. Redémarrer les serveurs s'ils sont arrêtés (les deux serveurs)
      try {
        Logger.info('🔄 Redémarrage des serveurs lors du rollback...');
        await Promise.all([
@@ -442,16 +459,16 @@ this.tracker.updateStep(8, 'running', 'Nettoyage cache temporaire...', 95);
        Logger.warning('⚠️ Erreur lors du nettoyage des fichiers temporaires système', tempCleanupError);
      }
 
-     Logger.success('✅ Rollback complet v3.0 terminé');
+     Logger.success('✅ Rollback complet v3.2 terminé');
 
    } catch (error) {
-     Logger.error('❌ Erreur critique lors du rollback v3.0', error);
+     Logger.error('❌ Erreur critique lors du rollback v3.2', error);
    }
  }
 
  private async cleanup(srv1Connected: boolean, srv2Connected: boolean): Promise<void> {
    try {
-     Logger.info('🔄 Nettoyage des connexions v3.0...');
+     Logger.info('🔄 Nettoyage des connexions v3.2...');
      
      if (srv1Connected) {
        try {
@@ -471,9 +488,9 @@ this.tracker.updateStep(8, 'running', 'Nettoyage cache temporaire...', 95);
        }
      }
      
-     Logger.success('✅ Nettoyage v3.0 terminé');
+     Logger.success('✅ Nettoyage v3.2 terminé');
    } catch (error) {
-     Logger.error('❌ Erreur lors du nettoyage v3.0', error);
+     Logger.error('❌ Erreur lors du nettoyage v3.2', error);
    }
  }
 
